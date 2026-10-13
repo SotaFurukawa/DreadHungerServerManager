@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="DreadHungerServerManager.App.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    NavigationCacheMode="Required">
+
+    <ScrollViewer>
+        <StackPanel
+            MaxWidth="880"
+            Padding="24,16,24,32"
+            HorizontalAlignment="Left"
+            Spacing="16">
+            <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="設定" />
+
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="起動オプション" />
+                    <TextBox
+                        Header="追加引数（-log の後ろに付けます）"
+                        PlaceholderText="例: -port=7777"
+                        Text="{x:Bind ViewModel.Options.AdditionalArguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                        Text="{x:Bind ViewModel.Options.AdditionalArgumentsError, Mode=OneWay}"
+                        Visibility="{x:Bind ViewModel.Options.HasAdditionalArgumentsError, Mode=OneWay}" />
+                    <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="通常は空欄のままで構いません。ポートを変える場合などに使います。変更内容はサーバーページのコマンドプレビューに反映されます。" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="サーバーログ" />
+                    <ComboBox Header="ログの取得方法" SelectedIndex="{x:Bind ViewModel.Options.LogSourceIndex, Mode=TwoWay}">
+                        <ComboBoxItem Content="自動（ログファイル優先、取れない間は標準出力）" />
+                        <ComboBoxItem Content="ログファイルのみ" />
+                        <ComboBoxItem Content="標準出力のみ" />
+                    </ComboBox>
+                    <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="DreadHungerServer.exe は自分のコンソール画面にログを出すため、多くの場合は標準出力では取得できません。サーバーが書き出すログファイルを読み取るのが確実です。" />
+
+                    <TextBlock Margin="0,8,0,0" Text="ログファイルの場所" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            AutomationProperties.Name="ログファイルの場所（空欄なら既定）"
+                            PlaceholderText="空欄なら既定の場所（下記）"
+                            Text="{x:Bind ViewModel.Options.LogFilePathOverride, Mode=TwoWay}" />
+                        <Button Grid.Column="1" Command="{x:Bind ViewModel.Options.BrowseLogFileCommand}" Content="参照…" />
+                        <Button Grid.Column="2" Command="{x:Bind ViewModel.Options.ResetLogFileCommand}" Content="既定に戻す" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource SecondaryTextStyle}" IsTextSelectionEnabled="True">
+                        <Run Text="使用するファイル: " /><Run Text="{x:Bind ViewModel.Options.EffectiveLogFilePath, Mode=OneWay}" />
+                    </TextBlock>
+
+                    <NumberBox
+                        Width="220"
+                        HorizontalAlignment="Left"
+                        Header="画面に残すログの行数"
+                        LargeChange="5000"
+                        Maximum="100000"
+                        Minimum="500"
+                        SmallChange="500"
+                        SpinButtonPlacementMode="Inline"
+                        Value="{x:Bind ViewModel.Options.MaxLogLines, Mode=TwoWay}" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="停止" />
+                    <ToggleSwitch
+                        Header="停止・再起動の前に確認する"
+                        IsOn="{x:Bind ViewModel.Options.ConfirmBeforeStop, Mode=TwoWay}"
+                        OffContent="確認しない"
+                        OnContent="確認する" />
+                    <NumberBox
+                        Width="220"
+                        HorizontalAlignment="Left"
+                        Header="安全な終了を待つ時間（秒）"
+                        LargeChange="10"
+                        Maximum="300"
+                        Minimum="5"
+                        SmallChange="5"
+                        SpinButtonPlacementMode="Inline"
+                        Value="{x:Bind ViewModel.Options.GracefulStopTimeoutSeconds, Mode=TwoWay}" />
+                    <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="停止時はまずサーバーのコンソールへ Ctrl+C を送り、通常の終了処理を行わせます。この時間を過ぎても終了しない場合は、強制終了するかを確認します。" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="アプリを閉じるとき" />
+                    <ComboBox Header="サーバーが起動中のとき" SelectedIndex="{x:Bind ViewModel.Options.CloseBehaviorIndex, Mode=TwoWay}">
+                        <ComboBoxItem Content="毎回確認する" />
+                        <ComboBoxItem Content="サーバーを停止して終了する" />
+                        <ComboBoxItem Content="サーバーを残して終了する" />
+                    </ComboBox>
+                    <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="サーバーを残して終了した場合も、次にこのアプリを開いたときに起動中のサーバーを自動で検出し、監視・停止できるようになります。" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="8">
+                    <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="設定ファイル" />
+                    <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="最後に使ったマップ・ゲーム設定・サーバーの場所などは自動で保存され、次回起動時に復元されます。" />
+                    <TextBlock IsTextSelectionEnabled="True" TextWrapping="Wrap">
+                        <Run Text="保存先: " /><Run Text="{x:Bind ViewModel.Options.Paths.DataDirectory}" />
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="settings.json（アプリ設定）/ presets.json（保存したプリセット）/ logs（アプリの動作記録）" />
+                    <Button
+                        Margin="0,4,0,0"
+                        Command="{x:Bind ViewModel.Options.OpenDataFolderCommand}"
+                        Content="保存先フォルダーを開く" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

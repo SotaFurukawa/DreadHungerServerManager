@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="TestData\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DreadHungerServerManager.Core\DreadHungerServerManager.Core.csproj" />
+    <!-- 結合テストで使う疑似サーバー。ビルド順を保証するためだけに参照し、アセンブリは取り込まない。 -->
+    <ProjectReference Include="..\..\tools\FakeDreadHungerServer\FakeDreadHungerServer.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <FakeServerOutputDirectory>$(MSBuildThisFileDirectory)..\..\tools\FakeDreadHungerServer\bin\$(Configuration)\net10.0\</FakeServerOutputDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>FakeServerOutputDirectory</_Parameter1>
+      <_Parameter2>$(FakeServerOutputDirectory)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

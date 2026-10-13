@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- UIに依存しないサーバー管理ロジック（モデル・設定・プロセス管理）。
+       将来のEC2連携やDiscord Bot、複数サーバー管理からもこのプロジェクトを再利用する。 -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DreadHungerServerManager.Core.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,128 @@
+LogInit: Build: ++DH+development-CL-0
+LogInit: Engine Version: 4.26.1-0+++DH+development
+LogInit: Compatible Engine Version: 4.26.0-0+++DH+development
+LogInit: Net CL: 0
+LogInit: OS: Windows Server 2019 (Release 2009) (), CPU: Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz, GPU: Microsoft Remote Display Adapter
+LogInit: Compiled (64-bit): Dec 20 2023 15:55:48
+LogInit: Compiled with Visual C++: 19.34.31933.00
+LogInit: Build Configuration: Shipping
+LogInit: Branch Name: ++DH+development
+LogInit: Command Line:  Expanse_Persistent?maxplayers=8?daysbeforeblizzard=3?dayminutes=9?predatordamage=1?coldintensity=1?hungerrate=1?coalburnrate=1?thralls=2 -log
+LogInit: Base Directory: C:/DreadHunger/WindowsServer/DreadHunger/Binaries/Win64/
+LogInit: Allocator: binned2
+LogInit: Installed Engine Build: 0
+LogInit: Presizing for max 2097152 objects, including 1 objects not considered by GC, pre-allocating 0 bytes for permanent pool.
+LogStreaming: Display: Async Loading initialized: Event Driven Loader: true, Async Loading Thread: false, Async Post Load: false
+LogInit: Object subsystem initialized
+[2026.10.13-04.55.35:783][  0]LogInit: Selected Device Profile: [WindowsServer]
+[2026.10.13-04.55.35:783][  0]LogInit: Applying CVar settings loaded from the selected device profile: [WindowsServer]
+[2026.10.13-04.55.35:783][  0]LogHAL: Display: Platform has ~ 2 GB [2107142144 / 2147483648 / 2], which maps to Smallest [LargestMinGB=32, LargerMinGB=12, DefaultMinGB=8, SmallerMinGB=6, SmallestMinGB=0)
+[2026.10.13-04.55.35:783][  0]LogInit: Going up to parent DeviceProfile [Windows]
+[2026.10.13-04.55.35:783][  0]LogInit: Going up to parent DeviceProfile []
+[2026.10.13-04.55.35:809][  0]LogInit: Computer: EC2AMAZ-XXXXXXX
+[2026.10.13-04.55.35:809][  0]LogInit: User: Administrator
+[2026.10.13-04.55.35:809][  0]LogInit: CPU Page size=4096, Cores=1
+[2026.10.13-04.55.35:810][  0]LogInit: High frequency timer resolution =10.000000 MHz
+[2026.10.13-04.55.35:810][  0]LogMemory: Memory total: Physical=2.0GB (2GB approx)
+[2026.10.13-04.55.35:810][  0]LogMemory: Platform Memory Stats for WindowsServer
+[2026.10.13-04.55.35:810][  0]LogMemory: Process Physical Memory: 58.48 MB used, 58.48 MB peak
+[2026.10.13-04.55.35:810][  0]LogMemory: Process Virtual Memory: 72.63 MB used, 72.63 MB peak
+[2026.10.13-04.55.35:811][  0]LogMemory: Physical Memory: 1558.26 MB used,  451.27 MB free, 2009.53 MB total
+[2026.10.13-04.55.35:816][  0]LogMemory: Virtual Memory: 134215984.00 MB used,  1742.35 MB free, 134217728.00 MB total
+[2026.10.13-04.55.35:817][  0]LogWindows: WindowsPlatformFeatures disabled or dedicated server build
+[2026.10.13-04.55.37:033][  0]LogInit: Physics initialised using underlying interface: PhysX
+[2026.10.13-04.55.37:038][  0]LogInit: Using OS detected language (en-US).
+[2026.10.13-04.55.37:039][  0]LogInit: Using OS detected locale (en-US).
+[2026.10.13-04.55.37:045][  0]LogTextLocalizationResource: LocRes '../../../Engine/Content/Localization/Engine/en-US/Engine.locres' could not be opened for reading!
+[2026.10.13-04.55.37:046][  0]LogTextLocalizationResource: LocRes '../../../Engine/Plugins/Online/OnlineFramework/Content/Localization/OnlineFramework/en-US/OnlineFramework.locres' could not be opened for reading!
+[2026.10.13-04.55.37:047][  0]LogTextLocalizationResource: LocRes '../../../Engine/Plugins/Online/OnlineSubsystem/Content/Localization/OnlineSubsystem/en-US/OnlineSubsystem.locres' could not be opened for reading!
+[2026.10.13-04.55.37:047][  0]LogTextLocalizationResource: LocRes '../../../Engine/Plugins/Online/OnlineSubsystemUtils/Content/Localization/OnlineSubsystemUtils/en-US/OnlineSubsystemUtils.locres' could not be opened for reading!
+[2026.10.13-04.55.37:048][  0]LogTextLocalizationResource: LocRes '../../../Engine/Plugins/Online/OnlineSubsystemSteam/Content/Localization/OnlineSubsystemSteam/en-US/OnlineSubsystemSteam.locres' could not be opened for reading!
+[2026.10.13-04.55.37:181][  0]LogRendererCore: Ray tracing is disabled. Reason: r.RayTracing=0.
+[2026.10.13-04.55.37:229][  0]LogInit: Using OS detected language (en-US).
+[2026.10.13-04.55.37:229][  0]LogInit: Using OS detected locale (en-US).
+[2026.10.13-04.55.37:241][  0]LogTextLocalizationManager: Compacting localization data took   1.95ms
+[2026.10.13-04.55.37:437][  0]LogAssetRegistry: FAssetRegistry took 0.1937 seconds to start up
+[2026.10.13-04.55.37:745][  0]LogCollisionProfile: Warning: Profile (NoCollision) - Custom Channel Name = 'GameTraceChannel14' hasn't been found
+[2026.10.13-04.55.37:747][  0]LogCollisionProfile: Warning: Profile (NoCollision) - Custom Channel Name = 'GameTraceChannel15' hasn't been found
+[2026.10.13-04.55.37:747][  0]LogCollisionProfile: Warning: Profile (NoCollision) - Custom Channel Name = 'GameTraceChannel16' hasn't been found
+[2026.10.13-04.55.37:747][  0]LogCollisionProfile: Warning: Profile (OverlapOnlyPawn) - Custom Channel Name = 'GameTraceChannel14' hasn't been found
+[2026.10.13-04.55.37:747][  0]LogCollisionProfile: Warning: Profile (OverlapOnlyPawn) - Custom Channel Name = 'GameTraceChannel15' hasn't been found
+[2026.10.13-04.55.37:763][  0]LogCollisionProfile: Warning: Profile (OverlapOnlyPawn) - Custom Channel Name = 'GameTraceChannel16' hasn't been found
+[2026.10.13-04.55.37:765][  0]LogCollisionProfile: Warning: Profile (Spectator) - Custom Channel Name = 'GameTraceChannel14' hasn't been found
+[2026.10.13-04.55.37:766][  0]LogCollisionProfile: Warning: Profile (Spectator) - Custom Channel Name = 'GameTraceChannel15' hasn't been found
+[2026.10.13-04.55.37:767][  0]LogCollisionProfile: Warning: Profile (Spectator) - Custom Channel Name = 'GameTraceChannel16' hasn't been found
+[2026.10.13-04.55.37:770][  0]LogCollisionProfile: Warning: Profile (UI) - Custom Channel Name = 'GameTraceChannel14' hasn't been found
+[2026.10.13-04.55.37:771][  0]LogCollisionProfile: Warning: Profile (UI) - Custom Channel Name = 'GameTraceChannel15' hasn't been found
+[2026.10.13-04.55.37:772][  0]LogCollisionProfile: Warning: Profile (UI) - Custom Channel Name = 'GameTraceChannel16' hasn't been found
+[2026.10.13-04.55.37:792][  0]LogStreaming: Display: FlushAsyncLoading: 1 QueuedPackages, 0 AsyncPackages
+[2026.10.13-04.55.37:800][  0]LogPackageLocalizationCache: Processed 17 localized package path(s) for 2 prioritized culture(s) in 0.000792 seconds
+[2026.10.13-04.55.37:803][  0]LogPakFile: New pak file ../../../DreadHunger/Content/Paks/DreadHunger-WindowsServer.pak added to pak precacher.
+[2026.10.13-04.55.37:837][  0]LogInit: Selected Device Profile: [WindowsServer]
+[2026.10.13-04.55.37:839][  0]LogInit: Active device profile: [000001D2E437AD80][000001D2DE267630 49] WindowsServer
+[2026.10.13-04.55.37:841][  0]LogInit: Profiles: [000001D2E437AF00][000001D2DE2689E0 49] Windows, [000001D2E437AD80][000001D2DE267630 49] WindowsServer,
+[2026.10.13-04.55.37:903][  0]LogSerialization: Display: AllowBulkDataInIoStore: 'true'
+[2026.10.13-04.55.37:962][  0]LogNetVersion: DreadHunger 1.0.0, NetCL: 0, EngineNetVer: 16, GameNetVer: 0 (Checksum: 4206296614)
+[2026.10.13-04.55.38:090][  0]LogStats: UGameplayTagsManager::InitializeManager -  0.005 s
+[2026.10.13-04.55.38:335][  0]LogUObjectArray: 18355 objects as part of root set at end of initial load.
+[2026.10.13-04.55.38:335][  0]LogUObjectAllocator: 4206416 out of 0 bytes used by permanent object pool.
+[2026.10.13-04.55.38:337][  0]LogUObjectArray: CloseDisregardForGC: 18355/0 objects in disregard for GC pool
+[2026.10.13-04.55.38:695][  0]LogEOSSDK: Initializing EOSSDK Version:1.14.1-18153445
+[2026.10.13-04.55.38:733][  0]LogEngine: Initializing Engine...
+[2026.10.13-04.55.38:756][  0]LogInit: Initializing FReadOnlyCVARCache
+[2026.10.13-04.55.38:757][  0]LogNetVersion: Set ProjectVersion to 1.0.0.0. Version Checksum will be recalculated on next use.
+[2026.10.13-04.55.38:759][  0]LogInit: Texture streaming: Disabled
+[2026.10.13-04.55.39:312][  0]LogStringTable: Warning: Failed to find string table entry for 'Game' 'Sword'. Did you forget to add a string table redirector?
+[2026.10.13-04.55.42:604][  0]LogPakFile: Precache HighWater 16MB
+
+[2026.10.13-04.55.42:604][  0]LogInit: Display: Game Engine Initialized.
+[2026.10.13-04.55.42:615][  0]LogInit: Display: Starting Game.
+[2026.10.13-04.55.42:619][  0]LogNet: Browse: /Game/Maps/NorthWestPassage/Expanse/Expanse_Persistent?Name=Player?maxplayers=8?daysbeforeblizzard=3?dayminutes=9?predatordamage=1?coldintensity=1?hungerrate=1?coalburnrate=1?thralls=2
+[2026.10.13-04.55.42:622][  0]LogLoad: LoadMap: /Game/Maps/NorthWestPassage/Expanse/Expanse_Persistent?Name=Player?maxplayers=8?daysbeforeblizzard=3?dayminutes=9?predatordamage=1?coldintensity=1?hungerrate=1?coalburnrate=1?thralls=2
+[2026.10.13-04.55.42:623][  0]LogWorld: BeginTearingDown for /Temp/Untitled_0
+[2026.10.13-04.55.42:639][  0]LogWorld: UWorld::CleanupWorld for Untitled, bSessionEnded=true, bCleanupResources=true
+[2026.10.13-04.55.42:692][  0]LogUObjectHash: Compacting FUObjectHashTables data took   3.24ms
+[2026.10.13-04.55.48:079][  0]LogPakFile: Precache HighWater 32MB
+
+[2026.10.13-04.55.48:080][  0]LogPakFile: Precache HighWater 48MB
+
+[2026.10.13-04.55.48:081][  0]LogPakFile: Precache HighWater 64MB
+
+[2026.10.13-04.55.48:082][  0]LogPakFile: Precache HighWater 80MB
+
+[2026.10.13-04.55.48:083][  0]LogPakFile: Precache HighWater 96MB
+
+[2026.10.13-04.55.48:083][  0]LogPakFile: Precache HighWater 112MB
+
+[2026.10.13-04.55.48:084][  0]LogPakFile: Precache HighWater 128MB
+
+[2026.10.13-04.55.48:084][  0]LogAIModule: Creating AISystem for world Expanse_Persistent
+[2026.10.13-04.55.48:891][  0]LogLoad: Game class is 'BP_DreadGameMode_C'
+[2026.10.13-04.55.48:921][  0]LogNet: ReplicationDriverClass is null! Not using ReplicationDriver.
+[2026.10.13-04.55.48:925][  0]LogNetCore: DDoS detection status: detection enabled: 0 analytics enabled: 0
+[2026.10.13-04.55.48:965][  0]LogInit: WinSock: Socket queue. Rx: 131072 (config 131072) Tx: 131072 (config 131072)
+[2026.10.13-04.55.48:967][  0]LogNet: Created socket for bind address: 0.0.0.0 on port 7777
+[2026.10.13-04.55.48:986][  0]LogModuleManager: Warning: ModuleManager: Module 'AESGCMHandlerComponent' not found - its StaticallyLinkedModuleInitializers function is null.
+[2026.10.13-04.55.48:994][  0]PacketHandlerLog: Warning: Unable to Load Module: AESGCMHandlerComponent
+[2026.10.13-04.55.48:994][  0]PacketHandlerLog: Loaded PacketHandler component: Engine.EngineHandlerComponentFactory (StatelessConnectHandlerComponent)
+[2026.10.13-04.55.48:997][  0]LogNet: GameNetDriver IpNetDriver_2147482544 IpNetDriver listening on port 7777
+[2026.10.13-04.55.49:009][  0]LogStreaming: Display: ULevelStreaming::RequestLevel(/Game/Maps/NorthWestPassage/Expanse/Expanse_Lighting) is flushing async loading
+[2026.10.13-04.55.49:209][  0]LogStreaming: Display: ULevelStreaming::RequestLevel(/Game/Maps/NorthWestPassage/Expanse/Expanse_Sound) is flushing async loading
+[2026.10.13-04.55.49:249][  0]LogStreaming: Display: ULevelStreaming::RequestLevel(/Game/Maps/NorthWestPassage/Expanse/Expanse_Gameplay) is flushing async loading
+[2026.10.13-04.55.49:419][  0]LogStreaming: Display: ULevelStreaming::RequestLevel(/Game/Maps/NorthWestPassage/Expanse/Expanse_AI) is flushing async loading
+[2026.10.13-04.55.49:804][  0]LogWorld: Bringing World /Game/Maps/NorthWestPassage/Expanse/Expanse_Persistent.Expanse_Persistent up for play (max tick rate 60) at 2026.10.13-04.55.49
+[2026.10.13-04.55.49:911][  0]LogDHGameMode: Set max players to 8
+[2026.10.13-04.55.49:913][  0]LogDHGameMode: Set custom game mode option 'daysbeforeblizzard' to 3.000000
+[2026.10.13-04.55.49:914][  0]LogDHGameMode: Set custom game mode option 'dayminutes' to 9.000000
+[2026.10.13-04.55.49:915][  0]LogDHGameMode: Set custom game mode option 'predatordamage' to 1.000000
+[2026.10.13-04.55.49:915][  0]LogDHGameMode: Set custom game mode option 'coldintensity' to 1.000000
+[2026.10.13-04.55.49:916][  0]LogDHGameMode: Set custom game mode option 'hungerrate' to 1.000000
+[2026.10.13-04.55.49:916][  0]LogDHGameMode: Set custom game mode option 'coalburnrate' to 1.000000
+[2026.10.13-04.55.49:917][  0]LogDHGameMode: Set custom game mode option 'thralls' to 2.000000
+[2026.10.13-04.55.49:930][  0]LogWorld: Bringing up level for play took: 0.348630
+[2026.10.13-04.55.49:945][  0]LogGameMode: Display: Match State Changed from EnteringMap to WaitingToStart
+[2026.10.13-04.55.50:231][  0]LogDHGameState: GUUID=049E53DE4FB7C45AD0DC108F097D8DBB
+[2026.10.13-04.55.50:260][  0]LogGameState: Match State Changed from EnteringMap to WaitingToStart
+[2026.10.13-04.55.50:263][  0]LogLoad: Took 7.640703 seconds to LoadMap(/Game/Maps/NorthWestPassage/Expanse/Expanse_Persistent)
+[2026.10.13-04.55.50:269][  0]LogInit: Display: Engine is initialized. Leaving FEngineLoop::Init()
+[2026.10.13-04.55.50:270][  0]LogLoad: (Engine Initialization) Total time: 18.19 seconds

@@ -1,0 +1,478 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="DreadHungerServerManager.App.Views.ServerPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:DreadHungerServerManager.App.Views"
+    xmlns:models="using:DreadHungerServerManager.Core.Models"
+    xmlns:vm="using:DreadHungerServerManager.App.ViewModels"
+    NavigationCacheMode="Required">
+
+    <Page.Resources>
+        <!-- 整数の設定（直接入力＋上下ボタン）。範囲外も入力でき、その場合は下にエラーを出す。 -->
+        <DataTemplate x:Key="IntegerSettingTemplate" x:DataType="vm:NumericSettingViewModel">
+            <Grid Margin="0,4" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind Label}" />
+                    <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="{x:Bind Caption}" />
+                </StackPanel>
+                <NumberBox
+                    Grid.Column="1"
+                    Width="150"
+                    AutomationProperties.Name="{x:Bind Label}"
+                    LargeChange="{x:Bind LargeChange}"
+                    SmallChange="{x:Bind SmallChange}"
+                    SpinButtonPlacementMode="Inline"
+                    Value="{x:Bind Value, Mode=TwoWay}" />
+                <TextBlock
+                    Grid.Row="1"
+                    Grid.ColumnSpan="2"
+                    Margin="0,4,0,0"
+                    FontSize="12"
+                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                    Text="{x:Bind Error, Mode=OneWay}"
+                    TextWrapping="Wrap"
+                    Visibility="{x:Bind HasError, Mode=OneWay}" />
+            </Grid>
+        </DataTemplate>
+
+        <!-- 倍率（小数2桁表示＋よく使う値のドロップダウン）。 -->
+        <DataTemplate x:Key="MultiplierSettingTemplate" x:DataType="vm:NumericSettingViewModel">
+            <Grid Margin="0,4" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind Label}" />
+                    <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="{x:Bind Caption}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                    <NumberBox
+                        Width="150"
+                        AutomationProperties.Name="{x:Bind Label}"
+                        LargeChange="{x:Bind LargeChange}"
+                        Loaded="MultiplierNumberBox_Loaded"
+                        SmallChange="{x:Bind SmallChange}"
+                        SpinButtonPlacementMode="Inline"
+                        Value="{x:Bind Value, Mode=TwoWay}" />
+                    <DropDownButton
+                        Padding="8,6"
+                        AutomationProperties.Name="よく使う倍率"
+                        Loaded="QuickValueButton_Loaded"
+                        ToolTipService.ToolTip="よく使う倍率から選ぶ">
+                        <FontIcon FontSize="14" Glyph="&#xE8FD;" />
+                    </DropDownButton>
+                </StackPanel>
+                <TextBlock
+                    Grid.Row="1"
+                    Grid.ColumnSpan="2"
+                    Margin="0,4,0,0"
+                    FontSize="12"
+                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                    Text="{x:Bind Error, Mode=OneWay}"
+                    TextWrapping="Wrap"
+                    Visibility="{x:Bind HasError, Mode=OneWay}" />
+            </Grid>
+        </DataTemplate>
+    </Page.Resources>
+
+    <Grid Padding="24,16,24,20" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="サーバー" />
+
+        <InfoBar
+            Grid.Row="1"
+            IsClosable="True"
+            IsOpen="{x:Bind ViewModel.IsNoticeOpen, Mode=TwoWay}"
+            Message="{x:Bind ViewModel.NoticeMessage, Mode=OneWay}"
+            Severity="{x:Bind local:ViewHelpers.ToSeverity(ViewModel.NoticeSeverity), Mode=OneWay}"
+            Title="{x:Bind ViewModel.NoticeTitle, Mode=OneWay}" />
+
+        <!-- 状態カード -->
+        <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}">
+            <Grid ColumnSpacing="28" RowSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Orientation="Horizontal" Spacing="14">
+                    <Grid Width="40" Height="40" VerticalAlignment="Center">
+                        <ProgressRing
+                            Width="40"
+                            Height="40"
+                            IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+                        <Ellipse
+                            Width="16"
+                            Height="16"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Fill="{x:Bind local:ViewHelpers.StateBrush(ViewModel.State), Mode=OneWay}" />
+                    </Grid>
+                    <StackPanel MinWidth="200" VerticalAlignment="Center">
+                        <TextBlock
+                            x:Name="StateTextBlock"
+                            FontSize="24"
+                            FontWeight="SemiBold"
+                            Text="{x:Bind ViewModel.StateText, Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="{x:Bind ViewModel.StateDetailText, Mode=OneWay}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <Grid Grid.Column="1" VerticalAlignment="Center" ColumnSpacing="28">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FactCaptionTextStyle}" Text="PID" />
+                        <TextBlock x:Name="PidTextBlock" Style="{StaticResource FactValueTextStyle}" Text="{x:Bind ViewModel.ProcessIdText, Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Style="{StaticResource FactCaptionTextStyle}" Text="起動時刻" />
+                        <TextBlock Style="{StaticResource FactValueTextStyle}" Text="{x:Bind ViewModel.StartedAtText, Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Style="{StaticResource FactCaptionTextStyle}" Text="稼働時間" />
+                        <TextBlock Style="{StaticResource FactValueTextStyle}" Text="{x:Bind ViewModel.UptimeText, Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="3">
+                        <TextBlock Style="{StaticResource FactCaptionTextStyle}" Text="ポート" />
+                        <TextBlock Style="{StaticResource FactValueTextStyle}" Text="{x:Bind ViewModel.PortText, Mode=OneWay}" />
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel
+                    Grid.Column="2"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button
+                        x:Name="StartButton"
+                        AutomationProperties.AutomationId="StartButton"
+                        Command="{x:Bind ViewModel.StartCommand}"
+                        Style="{StaticResource AccentButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="14" Glyph="&#xE768;" />
+                            <TextBlock Text="サーバー起動" />
+                        </StackPanel>
+                    </Button>
+                    <Button AutomationProperties.AutomationId="RestartButton" Command="{x:Bind ViewModel.RestartCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                            <TextBlock Text="再起動" />
+                        </StackPanel>
+                    </Button>
+                    <Button AutomationProperties.AutomationId="StopButton" Command="{x:Bind ViewModel.StopCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="14" Glyph="&#xE71A;" />
+                            <TextBlock Text="サーバー停止" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- 起動完了の判定に使うログの検出状況 -->
+                <StackPanel
+                    Grid.Row="1"
+                    Grid.ColumnSpan="3"
+                    Orientation="Horizontal"
+                    Spacing="24">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon
+                            FontSize="14"
+                            Foreground="{x:Bind local:ViewHelpers.CheckBrush(ViewModel.IsPortListening), Mode=OneWay}"
+                            Glyph="{x:Bind local:ViewHelpers.CheckGlyph(ViewModel.IsPortListening), Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="ポート待ち受け（IpNetDriver listening on port）" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon
+                            FontSize="14"
+                            Foreground="{x:Bind local:ViewHelpers.CheckBrush(ViewModel.IsWaitingToStart), Mode=OneWay}"
+                            Glyph="{x:Bind local:ViewHelpers.CheckGlyph(ViewModel.IsWaitingToStart), Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="マップ読み込み完了（Match State → WaitingToStart）" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="3" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="460" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 左列: 実行ファイル・プリセット・ゲーム設定 -->
+            <ScrollViewer Padding="0,0,14,0">
+                <StackPanel Spacing="16">
+                    <Border Style="{StaticResource CardBorderStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="サーバー実行ファイル" />
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox
+                                    AutomationProperties.AutomationId="ExecutablePathBox"
+                                    AutomationProperties.Name="サーバー実行ファイルの場所"
+                                    PlaceholderText="C:\DreadHunger\WindowsServer\DreadHungerServer.exe"
+                                    Text="{x:Bind ViewModel.ExecutablePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Grid.Column="1" Command="{x:Bind ViewModel.BrowseExecutableCommand}" Content="参照…" />
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon
+                                    FontSize="14"
+                                    Foreground="{x:Bind local:ViewHelpers.ExecutableBrush(ViewModel.ExecutableExists), Mode=OneWay}"
+                                    Glyph="{x:Bind local:ViewHelpers.ExecutableGlyph(ViewModel.ExecutableExists), Mode=OneWay}" />
+                                <TextBlock
+                                    MaxWidth="380"
+                                    Style="{StaticResource SecondaryTextStyle}"
+                                    Text="{x:Bind ViewModel.ExecutableStatusText, Mode=OneWay}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardBorderStyle}">
+                        <StackPanel Spacing="10">
+                            <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="プリセット" />
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox
+                                    HorizontalAlignment="Stretch"
+                                    AutomationProperties.Name="プリセット"
+                                    ItemsSource="{x:Bind ViewModel.Presets.Items}"
+                                    PlaceholderText="プリセットを選択"
+                                    SelectedItem="{x:Bind ViewModel.Presets.SelectedItem, Mode=TwoWay}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:PresetItemViewModel">
+                                            <StackPanel>
+                                                <TextBlock Text="{x:Bind DisplayName}" />
+                                                <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="{x:Bind Description}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <Button
+                                    Grid.Column="1"
+                                    VerticalAlignment="Stretch"
+                                    Command="{x:Bind ViewModel.Presets.LoadCommand}"
+                                    Content="読み込み" />
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Command="{x:Bind ViewModel.Presets.SaveAsCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon FontSize="14" Glyph="&#xE74E;" />
+                                        <TextBlock Text="名前を付けて保存…" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{x:Bind ViewModel.Presets.DeleteCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon FontSize="14" Glyph="&#xE74D;" />
+                                        <TextBlock Text="削除" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="標準プリセット（Standard / Short Game / Long Game）はマップを変えずに読み込みます。標準プリセットは削除できません。" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardBorderStyle}">
+                        <StackPanel Spacing="6">
+                            <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="マップ・ゲーム設定" />
+                            <ComboBox
+                                Margin="0,6,0,0"
+                                HorizontalAlignment="Stretch"
+                                AutomationProperties.AutomationId="MapComboBox"
+                                Header="マップ"
+                                ItemsSource="{x:Bind ViewModel.Game.Maps}"
+                                SelectedItem="{x:Bind ViewModel.Game.SelectedMapItem, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="models:GameMapInfo">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="{x:Bind DisplayName}" />
+                                            <TextBlock
+                                                VerticalAlignment="Center"
+                                                Style="{StaticResource SecondaryTextStyle}"
+                                                Text="{x:Bind MapName}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+
+                            <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="プレイヤー" />
+                            <ItemsControl ItemTemplate="{StaticResource IntegerSettingTemplate}" ItemsSource="{x:Bind ViewModel.Game.PlayerSettings}" />
+
+                            <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="時間" />
+                            <ItemsControl ItemTemplate="{StaticResource IntegerSettingTemplate}" ItemsSource="{x:Bind ViewModel.Game.TimeSettings}" />
+
+                            <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="倍率" />
+                            <ItemsControl ItemTemplate="{StaticResource MultiplierSettingTemplate}" ItemsSource="{x:Bind ViewModel.Game.MultiplierSettings}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- 右列: コマンドプレビュー・サーバーログ -->
+            <Grid Grid.Column="1" RowSpacing="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="10">
+                        <Grid>
+                            <TextBlock VerticalAlignment="Center" Style="{StaticResource CardTitleTextStyle}" Text="コマンドプレビュー" />
+                            <Button
+                                HorizontalAlignment="Right"
+                                Command="{x:Bind ViewModel.CopyCommandLineCommand}"
+                                ToolTipService.ToolTip="フルパス付きのコマンドをコピー（batファイルにも使えます）">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="14" Glyph="&#xE8C8;" />
+                                    <TextBlock Text="コピー" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                        <Border
+                            Padding="12,10"
+                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                            <TextBlock
+                                x:Name="CommandPreviewTextBlock"
+                                FontFamily="{StaticResource MonospaceFontFamily}"
+                                FontSize="13"
+                                IsTextSelectionEnabled="True"
+                                Text="{x:Bind ViewModel.CommandPreview, Mode=OneWay}"
+                                TextWrapping="Wrap" />
+                        </Border>
+                        <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="{x:Bind ViewModel.WorkingDirectoryText, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="1" Padding="16,14" Style="{StaticResource CardBorderStyle}">
+                    <Grid RowSpacing="8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center" Style="{StaticResource CardTitleTextStyle}" Text="サーバーログ" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <ToggleSwitch
+                                    MinWidth="0"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="自動スクロール"
+                                    IsOn="{x:Bind ViewModel.Log.AutoScroll, Mode=TwoWay}"
+                                    OffContent="自動スクロール"
+                                    OnContent="自動スクロール" />
+                                <Button Command="{x:Bind ViewModel.ClearLogCommand}" ToolTipService.ToolTip="画面上のログを消去（ログファイルは消えません）">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon FontSize="14" Glyph="&#xE894;" />
+                                        <TextBlock Text="ログ消去" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Click="CopyLog_Click" ToolTipService.ToolTip="選択した行（未選択ならすべて）をコピー">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon FontSize="14" Glyph="&#xE8C8;" />
+                                        <TextBlock Text="ログコピー" />
+                                    </StackPanel>
+                                </Button>
+                                <Button
+                                    AutomationProperties.Name="ログフォルダーを開く"
+                                    Command="{x:Bind ViewModel.OpenLogFolderCommand}"
+                                    ToolTipService.ToolTip="ログフォルダーを開く">
+                                    <FontIcon FontSize="14" Glyph="&#xE8B7;" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                        <ListView
+                            x:Name="LogListView"
+                            Grid.Row="1"
+                            Padding="0,4"
+                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            ItemsSource="{x:Bind ViewModel.Log.Lines}"
+                            SelectionMode="Extended">
+                            <ListView.KeyboardAccelerators>
+                                <KeyboardAccelerator
+                                    Invoked="CopyLogAccelerator_Invoked"
+                                    Key="C"
+                                    Modifiers="Control" />
+                            </ListView.KeyboardAccelerators>
+                            <ListView.ItemContainerStyle>
+                                <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
+                                    <Setter Property="MinHeight" Value="20" />
+                                    <Setter Property="Padding" Value="10,1" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="vm:LogLineViewModel">
+                                    <TextBlock
+                                        FontFamily="{StaticResource MonospaceFontFamily}"
+                                        FontSize="12"
+                                        Foreground="{x:Bind local:ViewHelpers.LogBrush(Kind)}"
+                                        Text="{x:Bind Text}"
+                                        TextWrapping="Wrap" />
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <Grid Grid.Row="2" ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                Style="{StaticResource SecondaryTextStyle}"
+                                Text="{x:Bind ViewModel.LogSourceText, Mode=OneWay}"
+                                TextTrimming="CharacterEllipsis"
+                                TextWrapping="NoWrap" />
+                            <TextBlock
+                                Grid.Column="1"
+                                Style="{StaticResource SecondaryTextStyle}"
+                                Text="{x:Bind ViewModel.Log.SummaryText, Mode=OneWay}"
+                                TextWrapping="NoWrap" />
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Page>
