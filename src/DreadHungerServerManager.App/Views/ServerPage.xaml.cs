@@ -1,5 +1,4 @@
-﻿using System.Globalization;
-using DreadHungerServerManager.App.ViewModels;
+﻿using DreadHungerServerManager.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -26,27 +25,6 @@ public sealed partial class ServerPage : Page
         {
             LogListView.ScrollIntoView(lines[^1]);
         }
-    }
-
-    private void MultiplierNumberBox_Loaded(object sender, RoutedEventArgs e) =>
-        ((NumberBox)sender).NumberFormatter = ViewHelpers.CreateMultiplierFormatter();
-
-    private void QuickValueButton_Loaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is not DropDownButton { DataContext: NumericSettingViewModel setting, Flyout: null } button)
-        {
-            return;
-        }
-
-        var flyout = new MenuFlyout();
-        foreach (var value in setting.QuickValues)
-        {
-            var item = new MenuFlyoutItem { Text = value.ToString("0.00", CultureInfo.InvariantCulture) };
-            item.Click += (_, _) => setting.Value = value;
-            flyout.Items.Add(item);
-        }
-
-        button.Flyout = flyout;
     }
 
     private void CopyLog_Click(object sender, RoutedEventArgs e) => CopySelectedLog();

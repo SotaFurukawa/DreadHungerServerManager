@@ -133,6 +133,37 @@
                 </Grid>
             </Border>
 
+            <!-- 起動に使うゲーム設定（「サーバー」ページと共通の設定欄） -->
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="460" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <local:GameSettingsPanel />
+                <Border
+                    Grid.Column="1"
+                    VerticalAlignment="Top"
+                    Style="{StaticResource CardBorderStyle}">
+                    <StackPanel Spacing="10">
+                        <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="起動に使うゲーム設定" />
+                        <TextBlock
+                            AutomationProperties.AutomationId="LaunchSettingsSummaryTextBlock"
+                            FontSize="18"
+                            FontWeight="SemiBold"
+                            Text="{x:Bind Cloud.LaunchSettingsSummary, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            Style="{StaticResource SecondaryTextStyle}"
+                            Text="「EC2 起動」を押すと、左の設定を EC2 上の常駐サービスに渡してから EC2 を起動します。Windows が起動すると、常駐サービスがこの設定でゲームサーバーを立ち上げます。起動が終わるまで、この画面で待って結果を表示します。"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            Style="{StaticResource SecondaryTextStyle}"
+                            Text="設定は「サーバー」ページと共通です。最後に起動した設定は EC2 側にも保存されるため、AWS コンソールなどから EC2 を起動した場合も、その設定で起動します。"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
             <!-- 接続先 -->
             <Border Style="{StaticResource CardBorderStyle}">
                 <StackPanel Spacing="8">

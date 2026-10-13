@@ -27,6 +27,18 @@ public sealed class ServerControlClient(IServerControlStore store, TimeProvider?
         CancellationToken cancellationToken = default)
     {
         await store.PutRequestAsync(serverId, request, cancellationToken).ConfigureAwait(false);
+        return await WaitForResultAsync(serverId, request.RequestId, timeout, progress, pollInterval, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>書き込み済みの要求の結果を待つ（EC2 の起動前に要求を書いておく場合など）。</summary>
+    public async Task<ServerRequestResult> WaitForResultAsync(
+        string serverId,
+        string requestId,
+        TimeSpan timeout,
+        IProgress<ServerHeartbeat>? progress = null,
+        TimeSpan? pollInterval = null,
+        CancellationToken cancellationToken = default)
+    {
         var startedAt = _time.GetUtcNow();
         while (true)
         {
@@ -35,7 +47,7 @@ public sealed class ServerControlClient(IServerControlStore store, TimeProvider?
             if (heartbeat is not null)
             {
                 progress?.Report(heartbeat);
-                if (heartbeat.LastResult is { } result && result.RequestId == request.RequestId)
+                if (heartbeat.LastResult is { } result && result.RequestId == requestId)
                 {
                     return result;
                 }
@@ -44,7 +56,7 @@ public sealed class ServerControlClient(IServerControlStore store, TimeProvider?
             if (_time.GetUtcNow() - startedAt >= timeout)
             {
                 var pending = await store.GetRequestAsync(serverId, cancellationToken).ConfigureAwait(false);
-                var reason = pending?.RequestId != request.RequestId
+                var reason = pending?.RequestId != requestId
                     ? "別の要求で上書きされました。"
                     : heartbeat is null || heartbeat.IsStale(_time.GetUtcNow())
                         ? "EC2 上の常駐サービスが応答していません（EC2 が停止中・起動処理中か、常駐サービスが動いていません）。"

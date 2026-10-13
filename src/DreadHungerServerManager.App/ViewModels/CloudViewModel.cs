@@ -315,9 +315,14 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
     public bool HasRemoteError => _remoteError is not null;
 
     /// <summary>EC2 上のゲームサーバーの起動・再起動に使う設定の説明。</summary>
-    public string RemoteLaunchSettingsText => _getGameSettings() is { } settings
-        ? $"起動・再起動には「サーバー」ページの設定を使います（{GameMaps.Get(settings.Map).DisplayName}・最大{settings.MaxPlayers}人・人狼{settings.Thralls}人）。"
-        : "「サーバー」ページのゲーム設定に誤りがあるため、起動・再起動できません。";
+    public string RemoteLaunchSettingsText => _getGameSettings() is not null
+        ? "「ゲームサーバー起動」「再起動」には、上の「起動に使うゲーム設定」を使います。"
+        : "「起動に使うゲーム設定」に誤りがあるため、起動・再起動できません。";
+
+    /// <summary>EC2 起動・ゲームサーバー起動に使う設定の要約。</summary>
+    public string LaunchSettingsSummary => _getGameSettings() is { } settings
+        ? $"{GameMaps.Get(settings.Map).DisplayName}・最大{settings.MaxPlayers}人・人狼{settings.Thralls}人・吹雪まで{settings.DaysBeforeBlizzard}日・1日{settings.DayMinutes}分"
+        : "設定に誤りがあります（赤字の項目を直してください）";
 
     private bool CanOperate => IsConfigured && !HasSettingsError && !IsBusy;
 
@@ -443,23 +448,81 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         RemoteStopCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>
+    /// 「起動に使うゲーム設定」を常駐サービスへの起動要求として先に書いてから EC2 を起動し、
+    /// 常駐サービスがその設定でゲームサーバーを起動するまで待つ（<see cref="CloudServerLauncher"/>）。
+    /// </summary>
     private async Task StartAsync()
     {
-        if (_settings.TryGetInstanceRef() is not { } instance)
+        if (_settings.TryGetInstanceRef() is not { } instance || _createControlStore(_settings) is not { } store)
         {
             return;
         }
 
-        await RunOperationAsync("EC2 起動", "EC2 の起動を要求しています…", async () =>
+        if (_getGameSettings() is not { } game)
         {
-            await _cloud.StartAsync(instance);
-            SetOperationText("EC2 の起動完了を待っています…（通常1～2分）");
-            var status = await _cloud.WaitForStateAsync(instance, CloudInstanceState.Running, StartTimeout, progress: new Progress<CloudInstanceStatus>(ApplyStatus));
-            ApplyStatus(status);
-            _ui.ShowToast(ConnectAddress is { } address
-                ? $"EC2 が起動しました。接続先: {address}（Windows とゲームサーバーの起動にはさらに数分かかります）"
-                : "EC2 が起動しました。パブリック IP はまだ割り当てられていません。");
+            await _ui.ShowErrorAsync("EC2 を起動できません", "「起動に使うゲーム設定」に誤りがあります。赤字の項目を直してからもう一度実行してください。");
+            return;
+        }
+
+        await RunOperationAsync("EC2 起動", "ゲーム設定を送っています…", async () =>
+        {
+            var result = await new CloudServerLauncher(_cloud, store).StartAsync(
+                instance,
+                _settings.ServerId,
+                game,
+                _requester,
+                new CloudStartOptions { InstanceTimeout = StartTimeout },
+                new Progress<CloudStartProgress>(OnStartProgress));
+            ApplyStatus(result.Instance);
+            ApplyHeartbeat(result.Heartbeat ?? _heartbeat);
+
+            var address = ConnectAddress is { } connect ? $"接続先: {connect}" : "パブリック IP はまだ割り当てられていません。";
+            if (result.GameServer is { Succeeded: true } started)
+            {
+                _ui.ShowToast($"{started.Message}　{address}");
+            }
+            else if (result.GameServer is { } failed)
+            {
+                await _ui.ShowErrorAsync("ゲームサーバーを起動できませんでした", $"EC2 は起動しましたが、ゲームサーバーの起動に失敗しました。{Environment.NewLine}{failed.Message}");
+            }
+            else if (!result.IsHostKnown)
+            {
+                _ui.ShowToast($"EC2 が起動しました。{address}（常駐サービスの状態がまだないため、ゲームサーバーの起動は確認していません）", NoticeSeverity.Informational);
+            }
+            else
+            {
+                _ui.ShowToast($"EC2 は起動しましたが、まだゲームサーバーの起動を確認できていません。{address}　しばらくしてから ↻ で確認してください。", NoticeSeverity.Warning);
+            }
         });
+    }
+
+    private void OnStartProgress(CloudStartProgress progress)
+    {
+        if (progress.Instance is { } instance)
+        {
+            ApplyStatus(instance);
+        }
+
+        if (progress.Heartbeat is { } heartbeat)
+        {
+            ApplyHeartbeat(heartbeat);
+        }
+
+        SetOperationText(progress.Stage switch
+        {
+            CloudStartStage.SendingRequest => "ゲーム設定を送っています…",
+            CloudStartStage.StartingInstance => "EC2 の起動を要求しています…",
+            CloudStartStage.WaitingForInstance => "EC2 の起動完了を待っています…（通常1～2分）",
+            _ => "Windows とゲームサーバーの起動を待っています…（通常2～5分）",
+        });
+    }
+
+    /// <summary>「サーバー」ページ（共通の設定欄）でゲーム設定が変わったときに呼ぶ。</summary>
+    public void NotifyGameSettingsChanged()
+    {
+        OnPropertyChanged(nameof(LaunchSettingsSummary));
+        RaiseRemoteProperties();
     }
 
     private async Task StopAsync()

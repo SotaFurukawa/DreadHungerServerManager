@@ -74,6 +74,7 @@ public partial class App : Application
             interaction.ShowToast($"エラーが発生しました: {ex.Message}", NoticeSeverity.Error);
         };
         ViewModel.SettingsChanged += (_, _) => ScheduleSave();
+        ViewModel.Game.Changed += (_, _) => CloudViewModel.NotifyGameSettingsChanged();
         CloudViewModel.SettingsChanged += (_, _) =>
         {
             if (_awsClients is not null)
