@@ -173,6 +173,7 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
     public string StateDetailText => _operationText
         ?? (!IsConfigured ? "下の「接続設定」でリージョンとインスタンスIDを入力してください。"
         : HasSettingsError ? "下の「接続設定」の誤りを直してください。"
+        : _lastUpdated is null && _errorMessage is not null ? "上のエラーの内容を確認してください。"
         : _lastUpdated is { } updated ? $"最終更新 {updated.ToLocalTime():HH:mm:ss}（{RefreshInterval.TotalSeconds:0}秒ごとに更新）"
         : "状態を取得しています…");
 
@@ -340,10 +341,10 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         }
         catch (CloudOperationException ex)
         {
-            ErrorMessage = ex.Message;
+            ErrorMessage = Describe(ex);
             if (showErrors)
             {
-                await _ui.ShowErrorAsync("EC2 の状態を取得できませんでした", ex.Message);
+                await _ui.ShowErrorAsync("EC2 の状態を取得できませんでした", ErrorMessage);
             }
         }
         finally
@@ -368,7 +369,7 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         }
         catch (CloudOperationException ex)
         {
-            RemoteError = ex.Message;
+            RemoteError = Describe(ex);
             RaiseRemoteProperties();
         }
     }
@@ -520,8 +521,8 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         }
         catch (CloudOperationException ex)
         {
-            ErrorMessage = ex.Message;
-            await _ui.ShowErrorAsync($"{name}に失敗しました", ex.Message);
+            ErrorMessage = Describe(ex);
+            await _ui.ShowErrorAsync($"{name}に失敗しました", ErrorMessage);
             await RefreshAsync(showErrors: false);
         }
     }
@@ -600,6 +601,15 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
             _ = RefreshAsync(showErrors: false);
         }
     }
+
+    /// <summary>
+    /// 利用者向けのエラー文。プロファイル名が空欄のまま認証情報が見つからない場合は、この PC にある
+    /// プロファイルを選ぶよう案内する（空欄だと default プロファイルしか探さないため）。
+    /// </summary>
+    private string Describe(CloudOperationException exception) =>
+        exception.Kind == CloudErrorKind.CredentialsNotFound && _settings.ProfileName is null && AvailableProfiles.Count > 0
+            ? $"{exception.Message}{Environment.NewLine}この PC にはプロファイル（{string.Join("、", AvailableProfiles)}）があります。下の「接続設定」の「AWS プロファイル」で選んでください。"
+            : exception.Message;
 
     private void ReloadProfiles()
     {
