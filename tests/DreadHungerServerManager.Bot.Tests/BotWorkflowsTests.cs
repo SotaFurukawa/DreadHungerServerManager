@@ -181,6 +181,58 @@ public sealed class BotWorkflowsTests
     }
 
     [Fact]
+    public async Task Stop_WhilePlayersAreOnline_IsRefused()
+    {
+        await using var host = new TestHost();
+        await StartInstanceWithPlayersAsync(host, players: 3);
+
+        var result = await host.Workflows.StopAsync(TestHost.Member);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("参加者が3人いるため停止できません", result.Message);
+        Assert.Contains("30分続くと自動で停止", result.Message);
+        Assert.Equal(0, host.Cloud.StopRequestCount);
+        Assert.Null(await host.Store.GetRequestAsync("default"));
+    }
+
+    [Fact]
+    public async Task Restart_WhilePlayersAreOnline_IsRefused()
+    {
+        await using var host = new TestHost();
+        await StartInstanceWithPlayersAsync(host, players: 1);
+
+        var result = await host.Workflows.RestartAsync(Departure, TestHost.Member);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("参加者が1人いるため再起動できません", result.Message);
+        Assert.Null(await host.Store.GetRequestAsync("default"));
+    }
+
+    [Fact]
+    public async Task Stop_WhenTheHostIsSilent_IsAllowedEvenIfPlayersWereSeen()
+    {
+        await using var host = new TestHost();
+        await StartInstanceWithPlayersAsync(host, players: 3, updatedAgo: TimeSpan.FromMinutes(10));
+
+        var result = await host.Workflows.StopAsync(TestHost.Member);
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Equal(1, host.Cloud.StopRequestCount);
+    }
+
+    [Fact]
+    public async Task Stop_AfterEveryoneLeft_StopsTheServer()
+    {
+        await using var host = new TestHost();
+        await host.StartInstanceAndHostAsync();
+
+        var result = await host.Workflows.StopAsync(TestHost.Member);
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Equal(1, host.Cloud.StopRequestCount);
+    }
+
+    [Fact]
     public async Task Stop_WhenAlreadyStopped_SaysSo()
     {
         await using var host = new TestHost();
@@ -307,6 +359,25 @@ public sealed class BotWorkflowsTests
 
         Assert.Contains("自動停止しました", Assert.Single(first));
         Assert.Empty(second);
+    }
+
+    /// <summary>EC2 が稼働中で、常駐サービスが「参加者 N 人で試合中」と伝えている状態にする。</summary>
+    private static async Task StartInstanceWithPlayersAsync(TestHost host, int players, TimeSpan updatedAgo = default)
+    {
+        host.Cloud.StartDuration = TimeSpan.Zero;
+        await host.Cloud.StartAsync(TestHost.Instance);
+        await host.Cloud.GetStatusAsync(TestHost.Instance);
+        await host.Store.PutHeartbeatAsync("default", new ServerHeartbeat
+        {
+            ServerId = "default",
+            UpdatedAt = host.Time.GetUtcNow() - updatedAgo,
+            State = ServerState.Running,
+            IsReady = true,
+            MatchState = MatchStates.InProgress,
+            PlayerCount = players,
+            Settings = GameSettings.Default,
+            AutoStop = AutoStopConfig.Default,
+        });
     }
 
     /// <summary>利用者に EC2 の場所（インスタンスID・リージョン・アカウント）が見えない。</summary>

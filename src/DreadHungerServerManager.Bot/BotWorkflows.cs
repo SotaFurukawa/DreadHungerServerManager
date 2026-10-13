@@ -117,7 +117,7 @@ public sealed class BotWorkflows(ICloudInstanceService cloud, IServerControlStor
         }, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>/stop: ゲームサーバーを安全に止めてから EC2 を停止する。</summary>
+    /// <summary>/stop: ゲームサーバーを安全に止めてから EC2 を停止する。参加者がいる間は断る（<see cref="RefuseWhilePlaying"/>）。</summary>
     public Task<BotResult> StopAsync(BotUser user, IProgress<string>? progress = null, CancellationToken cancellationToken = default) =>
         WithLockAsync("停止", user, async () =>
         {
@@ -128,6 +128,11 @@ public sealed class BotWorkflows(ICloudInstanceService cloud, IServerControlStor
                     return BotResult.Ok("⚪ EC2 は既に停止しています。");
                 case CloudInstanceState.Starting:
                     return BotResult.Fail("EC2 は起動処理中のため、まだ停止できません。1～2分後にもう一度 /stop を実行してください。");
+            }
+
+            if (RefuseWhilePlaying(status, "停止", "/stop") is { } refused)
+            {
+                return refused;
             }
 
             var note = "";
@@ -160,7 +165,7 @@ public sealed class BotWorkflows(ICloudInstanceService cloud, IServerControlStor
             return BotResult.Ok($"⚪ **Dread Hunger Server Stopped**\nゲームサーバーと EC2 を停止しました。{note}");
         }, cancellationToken);
 
-    /// <summary>/restart: EC2 は稼働したまま、指定の設定でゲームサーバーを起動し直す。</summary>
+    /// <summary>/restart: EC2 は稼働したまま、指定の設定でゲームサーバーを起動し直す。参加者がいる間は断る。</summary>
     public async Task<BotResult> RestartAsync(GameSettings settings, BotUser user, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {
         if (LaunchPanel.Validate(settings) is { } error)
@@ -179,6 +184,11 @@ public sealed class BotWorkflows(ICloudInstanceService cloud, IServerControlStor
             if (!status.IsHostAlive)
             {
                 return BotResult.Fail("EC2 上の常駐サービスが応答していません。Windows の起動中なら、数分後にもう一度実行してください。");
+            }
+
+            if (RefuseWhilePlaying(status, "再起動", "/restart") is { } refused)
+            {
+                return refused;
             }
 
             progress?.Report($"⏳ ゲームサーバーを再起動しています…\n{LaunchPanel.Summary(settings)}");
@@ -297,6 +307,22 @@ public sealed class BotWorkflows(ICloudInstanceService cloud, IServerControlStor
                 // 解放できなくても期限で自然に無効になる。
             }
         }
+    }
+
+    /// <summary>
+    /// 誰でも使える設定でも試合を壊されないよう、参加者がいる間は停止・再起動を断る。
+    /// 人数は常駐サービスの最新の状態で判断する。常駐サービスが応答していない（人数が分からない）ときは断らない（止められなくなるのを防ぐ）。
+    /// 管理者は GUI の「AWS / Cloud」ページからなら、参加者がいても停止できる。
+    /// </summary>
+    private static BotResult? RefuseWhilePlaying(BotStatus status, string operation, string command)
+    {
+        if (!status.IsHostAlive || status.Heartbeat is not { State: not ServerState.Stopped, PlayerCount: > 0 and var players } heartbeat)
+        {
+            return null;
+        }
+
+        var idle = heartbeat.AutoStop is { IdleShutdownEnabled: true, IdleTimeoutMinutes: var minutes } ? $"（誰もいない状態が{minutes}分続くと自動で停止します）" : "";
+        return BotResult.Fail($"参加者が{players}人いるため{operation}できません。全員が抜けてから、もう一度 {command} を実行してください。{idle}");
     }
 
     /// <summary>詳しい原因は管理者向けのログへ、利用者には場所を伏せた説明を返す。</summary>

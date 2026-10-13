@@ -140,7 +140,7 @@ public static class DiscordUi
         ["type"] = ResponseMessage,
         ["data"] = new JsonObject
         {
-            ["content"] = "⚠️ **ゲームサーバーと EC2 を停止しますか？**\n接続中のプレイヤーは切断されます。次に起動するとパブリック IP が変わります。",
+            ["content"] = "⚠️ **ゲームサーバーと EC2 を停止しますか？**\n参加者がいる間は停止できません。次に起動するとパブリック IP が変わります。",
             ["flags"] = Ephemeral,
             ["components"] = new JsonArray
             {
