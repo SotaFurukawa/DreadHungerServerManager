@@ -58,7 +58,7 @@ public partial class App : Application
         var presets = new PresetService(new JsonPresetStore(paths.PresetsFile));
         _manager = new ServerProcessManager();
         var interaction = new UserInteractionService();
-        ViewModel = new ServerViewModel(_manager, presets, interaction, paths, loaded.Value, SynchronizationContext.Current!);
+        ViewModel = new ServerViewModel(new GameServerController(_manager), presets, interaction, paths, loaded.Value, SynchronizationContext.Current!);
 
         _window = new MainWindow(ViewModel);
         interaction.Attach(_window);

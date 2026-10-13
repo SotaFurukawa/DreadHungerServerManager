@@ -15,7 +15,8 @@ Dread Hunger Dedicated Server（`DreadHungerServer.exe`）を、batファイル�
 - `IpNetDriver listening on port` と `Match State Changed from EnteringMap to WaitingToStart` の検出による起動完了の判定
 - サーバーログの表示（自動スクロール・消去・コピー。エラーは赤、起動完了の行は緑で表示）
 - 二重起動の防止。アプリ外で起動済みのサーバーも検出して、監視・停止できる
-- 異常終了の検出（終了コードと稼働時間を表示）
+- 異常終了の検出（終了コードと稼働時間を表示）。試合の終了後にサーバーが自分で終了した場合は、異常終了ではなく案内として表示
+- 接続中のプレイヤー人数と試合の状態（試合待ち／開始準備中／試合中／試合終了）の表示（サーバーログの参加・切断から集計）
 - プリセット（標準: Standard / Short Game / Long Game、名前を付けて保存・読み込み・削除）
 - 最後の設定（マップ・各値・サーバーの場所など）を自動保存し、次回起動時に復元
 
@@ -147,11 +148,13 @@ powershell -ExecutionPolicy Bypass -File scripts\Build-Installer.ps1
 
 ```
 DreadHungerServerManager.sln
-├─ src\DreadHungerServerManager.Core     UIに依存しないロジック（net10.0-windows）
-│   ├─ Models          GameSettings, GameMap, ServerPreset, ServerStatus, ServerLogLine
-│   ├─ Configuration   AppSettings（settings.jsonの形）, AppPaths, ServerPaths
-│   ├─ Services        ServerProcessManager, ServerCommandBuilder, GameSettingsValidator,
-│   │                  ServerLogAnalyzer, LogFileTailer, JsonAppSettingsStore, PresetService
+├─ src\DreadHungerServerManager.Core     UIに依存しないロジック（net10.0 と net10.0-windows）
+│   ├─ Models          GameSettings, GameMap, ServerPreset, ServerStatus, ServerLogLine, CloudInstance
+│   ├─ Configuration   AppSettings（settings.jsonの形）, CloudSettings, AppPaths, ServerPaths
+│   ├─ Services        ServerProcessManager, GameServerController, OperationGate, ServerCommandBuilder,
+│   │                  GameSettingsValidator, ServerLogAnalyzer, PlayerTracker, LogFileTailer,
+│   │                  JsonAppSettingsStore, PresetService
+│   ├─ Services\Cloud  ICloudInstanceService（EC2などの操作の抽象）, FakeCloudInstanceService
 │   └─ Interop         Win32 API（プロセス一覧・コンソール制御・ファイルID）
 ├─ src\DreadHungerServerManager.App      WinUI 3 のアプリ
 │   ├─ ViewModels      ServerViewModel ほか（MVVM。WinUIの型に依存しない）
@@ -167,6 +170,7 @@ DreadHungerServerManager.sln
 - WinUI 3（Windows App SDK 2.x）。ShikiWari と同じ見た目（Mica、TitleBar、NavigationView、カード）にするため WPF ではなく WinUI 3 を採用
 - 未パッケージ（`WindowsPackageType=None`）＋自己完結（.NET と Windows App SDK を同梱）。必要なコンポーネント（WinUI / Foundation / DWrite）だけを参照し、AI/ML用のライブラリは含めない
 - 外部ライブラリ: なし（MVVMの基盤も自前の小さな実装）
+- Core は `net10.0` と `net10.0-windows` の両方でビルドします。`net10.0` 版は Windows 専用の部分（プロセス管理・ログ追尾・Win32 呼び出し）を含まず、AWS Lambda（Linux）上の Discord Bot からも使えます
 
 ### サーバー起動方式
 
@@ -183,11 +187,14 @@ DreadHungerServerManager.sln
 - 停止は「サーバーのコンソールへ Ctrl+C」→ 待機 → 必要なら確認のうえプロセスツリーごと強制終了。Ctrl+C を送る前に、そのコンソールにサーバー以外のプロセス（batを実行したcmd.exeなど）が居ないことを確認する
 - 起動完了の判定・ログ表示は、ログファイルの追尾（`LogFileTailer`）を主に、標準出力を補助に使う
 - アプリ起動時に起動済みのサーバーを検出した場合は、そのプロセスとログファイルを管理下に置く
+- 試合が終わると、サーバーは `FPlatformMisc::RequestExit(0)` を出して自分で終了する。この行を検出して終了コードが0なら、異常終了ではなく「サーバーが自分で終了した」として扱う（Ctrl+C による `ConsoleCtrl RequestExit` は含まない）
+- プレイヤー人数は、ログの `Login request: ?Name=… userId: …`・`Join succeeded: …`（参加）と、`UNetConnection::Close: … Driver: GameNetDriver … PC: …`（切断）から数える（`PlayerTracker`）。参加まで至らなかった接続（`PC: NULL`）は数えない
+- 起動・停止の手順（安全な終了→待機→強制終了）は `GameServerController` にまとめ、GUI（確認ダイアログあり）と、今後追加する EC2 上の常駐サービス・Discord Bot（確認なし）で共通に使う。同時に別の操作が来た場合は `OperationGate` が「Server operation already in progress」で断る
 
 ### 今後の拡張に向けて
 
 - サーバー1台分の制御は `IServerProcessManager` と `ServerViewModel` の組にまとまっているため、複数サーバー管理はこの組をサーバーごとに持たせ、NavigationView に項目を増やす形で追加できます
-- EC2の起動/停止・パブリックIP取得・Discord Bot連携は、Core に新しいサービス（例: `ICloudInstanceService`）を追加し、ViewModel から呼び出す形を想定しています。Core は UI に依存しないため、Bot など別のプロセスからも再利用できます
+- EC2の起動/停止・パブリックIP取得は `ICloudInstanceService` として Core に抽象を用意しました（AWS SDK を使う実装は別プロジェクトで追加します）。`FakeCloudInstanceService` は実AWSを使わずに「停止中→起動処理中→稼働中」「稼働中→停止処理中→停止中」の遷移と、起動のたびにIPが変わる動きを再現します。AWS 連携の設定は `settings.json` の `cloud` 節に保存します（秘密情報は保存しません）
 - 自動起動は、`AppSettings` に項目を追加し、`App.OnLaunched` の起動済みサーバー検出の後で `StartCommand` を実行する形で追加できます
 - Mod対応は、起動引数やファイル配置の処理を `ServerCommandBuilder` と新しいサービスに追加する想定です
 
@@ -202,6 +209,8 @@ DreadHungerServerManager.sln
 | `-fakeignorectrlc` | Ctrl+Cを無視（強制終了の確認用） |
 | `-fakehidden` | 本体のコンソール画面を表示しない |
 | `-fakesingle` | ブートストラップを使わず1プロセスで動く |
+| `-fakeplayer=名前` | 起動完了の直後に、そのプレイヤーが参加したログを出す |
+| `-fakematchend=秒` | 起動完了から指定秒後に試合が終わり、実物と同じく自分で終了する（終了コード0） |
 
 ## トラブルシューティング
 

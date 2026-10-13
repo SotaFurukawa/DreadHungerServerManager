@@ -5,3 +5,13 @@ dist/
 *.user
 *.suo
 TestResults/
+
+# 認証情報・秘密情報（AWS のアクセスキー、Discord の Token など）を誤ってコミットしない
+.aws/
+*.pem
+*.pfx
+.env
+.env.*
+*.secrets.json
+*.local.json
+deploy/*.local.*

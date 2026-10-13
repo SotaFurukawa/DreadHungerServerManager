@@ -53,6 +53,9 @@ public sealed record AppSettings
 
     public int MaxLogLines { get; init; } = 5000;
 
+    /// <summary>AWS（EC2）連携。古い settings.json にはないため、無ければ既定値（連携しない）になる。</summary>
+    public CloudSettings Cloud { get; init; } = CloudSettings.Default;
+
     public static AppSettings Default { get; } = new();
 
     /// <summary>
@@ -69,5 +72,6 @@ public sealed record AppSettings
         GracefulStopTimeoutSeconds = Math.Clamp(GracefulStopTimeoutSeconds, MinGracefulStopTimeoutSeconds, MaxGracefulStopTimeoutSeconds),
         CloseBehavior = Enum.IsDefined(CloseBehavior) ? CloseBehavior : CloseBehavior.Ask,
         MaxLogLines = Math.Clamp(MaxLogLines, MinLogLines, MaxLogLinesLimit),
+        Cloud = (Cloud ?? CloudSettings.Default).Normalize(),
     };
 }

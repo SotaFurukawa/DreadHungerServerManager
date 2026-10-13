@@ -109,7 +109,7 @@
 
         <!-- 状態カード -->
         <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}">
-            <Grid ColumnSpacing="28" RowSpacing="12">
+            <Grid ColumnSpacing="20" RowSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -143,8 +143,9 @@
                     </StackPanel>
                 </StackPanel>
 
-                <Grid Grid.Column="1" VerticalAlignment="Center" ColumnSpacing="28">
+                <Grid Grid.Column="1" VerticalAlignment="Center" ColumnSpacing="20">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
@@ -165,6 +166,13 @@
                     <StackPanel Grid.Column="3">
                         <TextBlock Style="{StaticResource FactCaptionTextStyle}" Text="ポート" />
                         <TextBlock Style="{StaticResource FactValueTextStyle}" Text="{x:Bind ViewModel.PortText, Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="4">
+                        <TextBlock Style="{StaticResource FactCaptionTextStyle}" Text="プレイヤー" />
+                        <TextBlock
+                            AutomationProperties.AutomationId="PlayerCountTextBlock"
+                            Style="{StaticResource FactValueTextStyle}"
+                            Text="{x:Bind ViewModel.PlayerCountText, Mode=OneWay}" />
                     </StackPanel>
                 </Grid>
 

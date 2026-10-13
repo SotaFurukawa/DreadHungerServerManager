@@ -1,0 +1,50 @@
+LogInit: Command Line:  Expanse_Persistent?maxplayers=1?daysbeforeblizzard=6?dayminutes=9?predatordamage=1?coldintensity=1?hungerrate=1?coalburnrate=1?thralls=0 -log
+[2026.10.13-06.39.23:042][  0]LogInit: Computer: EC2AMAZ-XXXXXXX
+[2026.10.13-06.39.34:205][  0]LogNet: GameNetDriver IpNetDriver_2147482544 IpNetDriver listening on port 7777
+[2026.10.13-06.39.35:069][  0]LogDHGameMode: Set max players to 1
+[2026.10.13-06.39.35:078][  0]LogDHGameMode: Set custom game mode option 'thralls' to 0.000000
+[2026.10.13-06.39.35:114][  0]LogGameMode: Display: Match State Changed from EnteringMap to WaitingToStart
+[2026.10.13-06.39.35:476][  0]LogDHGameState: GUUID=D00658084B4600CF4E5E4DBCCFE19CAD
+[2026.10.13-06.39.35:505][  0]LogGameState: Match State Changed from EnteringMap to WaitingToStart
+[2026.10.13-06.39.35:518][  0]LogLoad: (Engine Initialization) Total time: 14.28 seconds
+[2026.10.13-06.41.27:847][671]LogNet: NotifyAcceptingConnection accepted from: 203.0.113.10:61768
+[2026.10.13-06.41.42:198][671]LogNet: NotifyAcceptingConnection accepted from: 203.0.113.10:61768
+[2026.10.13-06.41.42:254][671]LogNet: Server accepting post-challenge connection from: 203.0.113.10:61768
+[2026.10.13-06.41.42:259][671]LogModuleManager: Warning: ModuleManager: Module 'AESGCMHandlerComponent' not found - its StaticallyLinkedModuleInitializers function is null.
+[2026.10.13-06.41.42:284][671]PacketHandlerLog: Warning: Unable to Load Module: AESGCMHandlerComponent
+[2026.10.13-06.41.42:286][671]PacketHandlerLog: Loaded PacketHandler component: Engine.EngineHandlerComponentFactory (StatelessConnectHandlerComponent)
+[2026.10.13-06.41.42:294][671]LogNet: NotifyAcceptedConnection: Name: Expanse_Persistent, TimeStamp: 10/13/26 06:41:42, [UNetConnection] RemoteAddr: 203.0.113.10:61768, Name: IpConnection_2147480710, Driver: GameNetDriver IpNetDriver_2147482544, IsServer: YES, PC: NULL, Owner: NULL, UniqueId: INVALID
+[2026.10.13-06.41.42:295][671]LogNet: AddClientConnection: Added client connection: [UNetConnection] RemoteAddr: 203.0.113.10:61768, Name: IpConnection_2147480710, Driver: GameNetDriver IpNetDriver_2147482544, IsServer: YES, PC: NULL, Owner: NULL, UniqueId: INVALID
+[2026.10.13-06.41.42:302][671]LogNet: NotifyAcceptingChannel Control 0 server World /Game/Maps/NorthWestPassage/Expanse/Expanse_Persistent.Expanse_Persistent: Accepted
+[2026.10.13-06.41.42:304][671]LogNet: Remote platform little endian=1
+[2026.10.13-06.41.42:305][671]LogNet: This platform little endian=1
+[2026.10.13-06.41.42:306][671]LogNetVersion: DreadHunger 1.0.0.0, NetCL: 0, EngineNetVer: 16, GameNetVer: 0 (Checksum: 1077741749)
+[2026.10.13-06.41.42:310][671]LogNet: Warning: Took too long to receive packets. Time: 14.47 IpNetDriver_2147482544
+[2026.10.13-06.41.42:921][672]LogNet: UNetDriver::TickDispatch: Very long time between ticks. DeltaTime: 15.08, Realtime: 15.08. IpNetDriver_2147482544
+[2026.10.13-06.41.42:928][672]LogNet: Login request: ?Name=Player1 userId: EOSPlus:76561190000000001_+_|00000000000000000000000000000001 platform: EOSPlus
+[2026.10.13-06.41.42:944][673]LogNet: Client netspeed is 100000
+[2026.10.13-06.41.45:298][809]LogNet: Join request: /Engine/Maps/Entry?Name=Player1?SplitscreenCount=1
+[2026.10.13-06.41.45:329][809]LogOnlineSession: Warning: OSS: No game present to join for session (GameSession)
+[2026.10.13-06.41.45:380][809]LogNet: Join succeeded: Player1
+[2026.10.13-06.41.48:244][978]LogAnimation: Warning: Zero-length look-at axis specified in LookAt node. Reverting to default.
+[2026.10.13-06.41.48:276][978]LogGameMode: Display: Match State Changed from WaitingToStart to PokerGame
+[2026.10.13-06.41.48:276][978]LogGameState: Match State Changed from WaitingToStart to PokerGame
+[2026.10.13-06.42.08:237][149]LogGameMode: Display: Match State Changed from PokerGame to InProgress
+[2026.10.13-06.42.08:322][149]LogGameState: Match State Changed from PokerGame to InProgress
+[2026.10.13-06.43.34:045][274]LogGameMode: GameMode returned ReadyToEndMatch
+[2026.10.13-06.43.34:046][274]LogGameMode: Display: Match State Changed from InProgress to WaitingPostMatch
+[2026.10.13-06.43.34:103][274]LogGameMode: MatchStatsExported
+[2026.10.13-06.43.34:109][274]LogGameState: Match State Changed from InProgress to WaitingPostMatch
+[2026.10.13-06.43.34:121][274]LogMatchReplay: ReplayExported
+[2026.10.13-06.43.34:124][274]LogDHBufferTransferComponent: Sending buffer with a size of 2548
+[2026.10.13-06.43.34:162][277]LogDHBufferTransferComponent: Sending buffer chunk with a size of 2548
+[2026.10.13-06.43.49:210][175]LogNet: UChannel::ReceivedSequencedBunch: Bunch.bClose == true. ChIndex == 0. Calling ConditionalCleanUp.
+[2026.10.13-06.43.49:211][175]LogNet: UChannel::CleanUp: ChIndex == 0. Closing connection. [UChannel] ChIndex: 0, Closing: 0 [UNetConnection] RemoteAddr: 203.0.113.10:61768, Name: IpConnection_2147480710, Driver: GameNetDriver IpNetDriver_2147482544, IsServer: YES, PC: BP_DreadPlayerController_C_2147480706, Owner: BP_DreadPlayerController_C_2147480706, UniqueId: EOSPlus:76561190000000001_+_|00000000000000000000000000000001
+[2026.10.13-06.43.49:213][175]LogNet: UNetConnection::Close: [UNetConnection] RemoteAddr: 203.0.113.10:61768, Name: IpConnection_2147480710, Driver: GameNetDriver IpNetDriver_2147482544, IsServer: YES, PC: BP_DreadPlayerController_C_2147480706, Owner: BP_DreadPlayerController_C_2147480706, UniqueId: EOSPlus:76561190000000001_+_|00000000000000000000000000000001, Channels: 15, Time: 2026.10.13-06.43.49
+[2026.10.13-06.43.49:214][175]LogNet: UChannel::Close: Sending CloseBunch. ChIndex == 0. Name: [UChannel] ChIndex: 0, Closing: 0 [UNetConnection] RemoteAddr: 203.0.113.10:61768, Name: IpConnection_2147480710, Driver: GameNetDriver IpNetDriver_2147482544, IsServer: YES, PC: BP_DreadPlayerController_C_2147480706, Owner: BP_DreadPlayerController_C_2147480706, UniqueId: EOSPlus:76561190000000001_+_|00000000000000000000000000000001
+[2026.10.13-06.43.49:229][176]LogOnlineSession: Warning: OSS: No game present to leave for session (GameSession)
+[2026.10.13-06.43.59:245][775]LogGenericPlatformMisc: FPlatformMisc::RequestExit(0)
+[2026.10.13-06.43.59:247][775]LogCore: Engine exit requested (reason: GenericPlatform RequestExit)
+[2026.10.13-06.43.59:248][776]LogCore: Engine exit requested (reason: EngineExit() was called; note: exit was already requested)
+[2026.10.13-06.43.59:256][776]LogInit: Display: PreExit Game.
+[2026.10.13-06.43.59:468][776]LogExit: Preparing to exit.

@@ -11,6 +11,8 @@
 //   -fakedelay=ミリ秒  起動完了までの時間（既定 1500）
 //   -fakecrash=秒      指定秒後に異常終了する（終了コード 3）
 //   -fakeignorectrlc   Ctrl+C を無視する（強制終了の確認用）
+//   -fakeplayer=名前   起動完了の直後に、そのプレイヤーが参加したログを出す
+//   -fakematchend=秒   起動完了から指定秒後に試合が終わり、実物と同じく自分で終了する（終了コード 0）
 //   -port=番号         待ち受けポート（既定 7777）
 using System.Diagnostics;
 using System.Text;
@@ -49,6 +51,8 @@ int RunServer()
     var port = GetIntOption("-port=", 7777);
     var delay = GetIntOption("-fakedelay=", 1500);
     var crashAfter = GetIntOption("-fakecrash=", 0);
+    var matchEndAfter = GetIntOption("-fakematchend=", 0);
+    var playerName = options.FirstOrDefault(arg => arg.StartsWith("-fakeplayer=", StringComparison.OrdinalIgnoreCase))?["-fakeplayer=".Length..];
     var maxPlayers = url.Split('?').Select(part => part.Split('=')).FirstOrDefault(kv => kv[0] == "maxplayers")?.ElementAtOrDefault(1) ?? "8";
 
     var logDirectory = Path.Combine(AppContext.BaseDirectory, "DreadHunger", "Saved", "Logs");
@@ -103,10 +107,36 @@ int RunServer()
     Write("LogGameMode", "Display: Match State Changed from EnteringMap to WaitingToStart");
     Write("LogLoad", $"Took {delay / 1000.0:0.00} seconds to LoadMap(/Game/Maps/{mapName})");
 
+    // 実機ログ（UE 標準の LogNet）と同じ形式で、参加・切断を出す。
+    var playerId = $"NULL:fake-{playerName}";
+    if (playerName is not null)
+    {
+        Write("LogNet", $"Login request: ?Name={playerName} userId: {playerId} platform: NULL");
+        Write("LogNet", $"Join succeeded: {playerName}");
+    }
+
     var stopwatch = Stopwatch.StartNew();
     while (!exitRequested.Wait(TimeSpan.FromSeconds(1)))
     {
         frame += 30;
+        if (matchEndAfter > 0 && stopwatch.Elapsed.TotalSeconds >= matchEndAfter)
+        {
+            Write("LogGameMode", "Display: Match State Changed from WaitingToStart to PokerGame");
+            Write("LogGameMode", "Display: Match State Changed from PokerGame to InProgress");
+            Write("LogGameMode", "GameMode returned ReadyToEndMatch");
+            Write("LogGameMode", "Display: Match State Changed from InProgress to WaitingPostMatch");
+            if (playerName is not null)
+            {
+                Write("LogNet", $"UNetConnection::Close: [UNetConnection] RemoteAddr: 203.0.113.10:61768, Name: IpConnection_2147480710, Driver: GameNetDriver IpNetDriver_2147482411, IsServer: YES, PC: BP_DreadPlayerController_C_2147480706, Owner: BP_DreadPlayerController_C_2147480706, UniqueId: {playerId}, Channels: 15, Time: {DateTime.UtcNow:yyyy.MM.dd-HH.mm.ss}");
+            }
+
+            Write("LogGenericPlatformMisc", "FPlatformMisc::RequestExit(0)");
+            Write("LogCore", "Engine exit requested (reason: GenericPlatform RequestExit)");
+            Thread.Sleep(300);
+            Write("LogExit", "Exiting.");
+            return 0;
+        }
+
         if (crashAfter > 0 && stopwatch.Elapsed.TotalSeconds >= crashAfter)
         {
             Write("LogWindows", "Error: === Critical error: ===");

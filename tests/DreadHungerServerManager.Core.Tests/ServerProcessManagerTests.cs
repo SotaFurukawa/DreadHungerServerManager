@@ -135,8 +135,27 @@ public sealed class ServerProcessManagerTests : IDisposable
         var info = await exited.WaitAsync(Timeout);
 
         Assert.True(info.IsAbnormal);
+        Assert.Equal(ServerExitKind.Unexpected, info.Kind);
         Assert.Equal(3, info.ExitCode);
         Assert.Equal(ServerState.Stopped, manager.Status.State);
+    }
+
+    [Fact]
+    public async Task MatchEnd_IsReportedAsEndedByServerAndPlayersAreCounted()
+    {
+        var manager = CreateManager();
+        var exited = WaitForExit(manager);
+
+        manager.Start(Request("-fakehidden", "-fakedelay=200", "-fakeplayer=Tester", "-fakematchend=3"));
+        await WaitUntilAsync(() => manager.Status.PlayerCount == 1);
+        Assert.Equal(MatchStates.WaitingToStart, manager.Status.MatchState);
+        var info = await exited.WaitAsync(Timeout);
+
+        Assert.Equal(ServerExitKind.EndedByServer, info.Kind);
+        Assert.False(info.IsAbnormal);
+        Assert.False(info.WasRequested);
+        Assert.Equal(0, info.ExitCode);
+        Assert.Equal(0, manager.Status.PlayerCount);
     }
 
     [Fact]

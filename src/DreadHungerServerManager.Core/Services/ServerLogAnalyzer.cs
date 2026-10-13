@@ -29,6 +29,22 @@ public static partial class ServerLogAnalyzer
     public static bool IsWaitingToStart(string line) =>
         line.Contains(WaitingToStartMarker, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>「Match State Changed from InProgress to WaitingPostMatch」から変更後の状態を読む。</summary>
+    public static bool TryGetMatchState(string line, out string state)
+    {
+        var match = MatchStateRegex().Match(line);
+        state = match.Success ? match.Groups[1].Value : "";
+        return match.Success;
+    }
+
+    /// <summary>
+    /// サーバー自身による終了要求か。試合終了後、サーバーは「FPlatformMisc::RequestExit(0)」を出して自分で終了する。
+    /// Ctrl+Cによる終了（reason: ConsoleCtrl RequestExit）は含まない。
+    /// </summary>
+    public static bool IsServerExitRequest(string line) =>
+        line.Contains("FPlatformMisc::RequestExit(0)", StringComparison.Ordinal)
+        || line.Contains("Engine exit requested (reason: GenericPlatform RequestExit)", StringComparison.Ordinal);
+
     public static LogLineKind Classify(string line)
     {
         if (TryGetListeningPort(line, out _) || IsWaitingToStart(line))
@@ -48,4 +64,7 @@ public static partial class ServerLogAnalyzer
 
     [GeneratedRegex(@"IpNetDriver listening on port (\d+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ListeningRegex();
+
+    [GeneratedRegex(@"Match State Changed from \w+ to (\w+)", RegexOptions.CultureInvariant)]
+    private static partial Regex MatchStateRegex();
 }

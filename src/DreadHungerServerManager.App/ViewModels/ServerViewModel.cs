@@ -11,8 +11,8 @@ namespace DreadHungerServerManager.App.ViewModels;
 public sealed class ServerViewModel : ObservableObject, IDisposable
 {
     private static readonly TimeSpan StartupWarningDelay = TimeSpan.FromMinutes(3);
-    private static readonly TimeSpan KillTimeout = TimeSpan.FromSeconds(15);
 
+    private readonly GameServerController _controller;
     private readonly IServerProcessManager _manager;
     private readonly IUserInteraction _ui;
     private readonly SynchronizationContext _uiContext;
@@ -30,15 +30,20 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
     private bool _startupWarningShown;
     private bool _noticeIsStartValidation;
 
+    // 画面で編集しない項目（AWS連携など）も保存時に失わないよう、読み込んだ設定を土台にする。
+    private readonly AppSettings _baseSettings;
+
     public ServerViewModel(
-        IServerProcessManager manager,
+        GameServerController controller,
         PresetService presets,
         IUserInteraction ui,
         AppPaths paths,
         AppSettings settings,
         SynchronizationContext uiContext)
     {
-        _manager = manager;
+        _controller = controller;
+        _manager = controller.Manager;
+        _baseSettings = settings;
         _ui = ui;
         _uiContext = uiContext;
         _executablePath = settings.ServerExecutablePath;
@@ -161,6 +166,7 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
     {
         ServerState.Starting => "起動完了のログを待っています…",
         ServerState.Running when _status.IsAttached && !IsReadyConfirmed => "既に起動していたサーバーを管理しています（起動完了ログは未確認）",
+        ServerState.Running when MatchDetailText is { } detail => detail,
         ServerState.Running when _status.IsAttached => "既に起動していたサーバーを管理しています",
         ServerState.Running => "サーバー起動完了",
         ServerState.Stopping => "サーバーの終了を待っています…",
@@ -204,6 +210,17 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
     }
 
     public string PortText => _status.ListeningPort?.ToString() ?? "—";
+
+    /// <summary>ログの参加・切断から数えた接続中の人数。</summary>
+    public string PlayerCountText => State == ServerState.Stopped ? "—" : $"{_status.PlayerCount}人";
+
+    private string? MatchDetailText => _status.MatchState switch
+    {
+        MatchStates.PokerGame => "試合の開始準備中（ポーカー）",
+        MatchStates.InProgress => "試合中",
+        MatchStates.WaitingPostMatch => "試合終了（まもなくサーバーが自動で終了します）",
+        _ => null,
+    };
 
     public string LogSourceText
     {
@@ -308,7 +325,7 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
         SetNotice(NoticeSeverity.Informational, "起動中のサーバーを検出しました", message);
     }
 
-    public AppSettings CreateSettingsSnapshot() => new()
+    public AppSettings CreateSettingsSnapshot() => _baseSettings with
     {
         ServerExecutablePath = ExecutablePath.Trim(),
         Game = Game.BuildForPersistence(),
@@ -386,20 +403,22 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var settings = Game.TryGetSettings()!;
-        var request = new ServerLaunchRequest
-        {
-            ExecutablePath = ExecutablePath.Trim(),
-            Arguments = ServerCommandBuilder.BuildArguments(settings, Options.AdditionalArguments),
-            LogFilePath = ServerPaths.ResolveLogFilePath(ExecutablePath, Options.LogFilePathOverrideOrNull),
-            LogSource = Options.LogSource,
-        };
+        var request = GameServerController.CreateLaunchRequest(
+            ExecutablePath,
+            Game.TryGetSettings()!,
+            Options.AdditionalArguments,
+            Options.LogFilePathOverrideOrNull,
+            Options.LogSource);
 
         IsNoticeOpen = false;
         _startupWarningShown = false;
         try
         {
-            await Task.Run(() => _manager.Start(request));
+            await _controller.StartAsync(request);
+        }
+        catch (OperationInProgressException ex)
+        {
+            SetNotice(NoticeSeverity.Warning, "サーバーを起動できません", ex.Message);
         }
         catch (ServerStartException ex)
         {
@@ -460,40 +479,38 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
     /// <summary>安全な終了を要求し、終わらなければ強制終了するか確認する。停止できたらtrue。</summary>
     private async Task<bool> StopCoreAsync()
     {
-        var outcome = await _manager.StopAsync(Options.GracefulStopTimeout);
-        if (outcome is StopOutcome.Exited or StopOutcome.AlreadyStopped || _manager.Status.State == ServerState.Stopped)
+        StopResult result;
+        try
         {
-            return true;
+            result = await _controller.StopAsync(Options.GracefulStopTimeout, ConfirmForceKillAsync);
         }
-
-        var reason = outcome == StopOutcome.SignalUnavailable
-            ? "サーバーのコンソールが見つからないため、安全な終了を要求できませんでした。"
-            : $"{Options.GracefulStopTimeoutSeconds:0}秒待ちましたが、サーバーが終了していません。";
-        var force = await _ui.ConfirmAsync(
-            "サーバーを強制終了しますか？",
-            reason + Environment.NewLine + "強制終了すると、進行中のゲームは失われます。",
-            "強制終了",
-            "停止をやめる");
-        if (_manager.Status.State == ServerState.Stopped)
+        catch (OperationInProgressException ex)
         {
-            return true;
-        }
-
-        if (!force)
-        {
-            _manager.CancelStop();
+            SetNotice(NoticeSeverity.Warning, "サーバーを停止できません", ex.Message);
             return false;
         }
 
-        if (await _manager.KillAsync(KillTimeout))
+        if (result != StopResult.Failed)
         {
-            return true;
+            return result == StopResult.Stopped;
         }
 
         await _ui.ShowErrorAsync(
             "サーバーを停止できませんでした",
             "プロセスを終了できませんでした。このアプリを管理者として実行するか、タスク マネージャーから DreadHungerServer を終了してください。");
         return false;
+    }
+
+    private Task<bool> ConfirmForceKillAsync(StopOutcome outcome)
+    {
+        var reason = outcome == StopOutcome.SignalUnavailable
+            ? "サーバーのコンソールが見つからないため、安全な終了を要求できませんでした。"
+            : $"{Options.GracefulStopTimeoutSeconds:0}秒待ちましたが、サーバーが終了していません。";
+        return _ui.ConfirmAsync(
+            "サーバーを強制終了しますか？",
+            reason + Environment.NewLine + "強制終了すると、進行中のゲームは失われます。",
+            "強制終了",
+            "停止をやめる");
     }
 
     private List<string> CollectStartErrors()
@@ -617,6 +634,7 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(StartedAtText));
         OnPropertyChanged(nameof(UptimeText));
         OnPropertyChanged(nameof(PortText));
+        OnPropertyChanged(nameof(PlayerCountText));
         OnPropertyChanged(nameof(LogSourceText));
         StartCommand.NotifyCanExecuteChanged();
         StopCommand.NotifyCanExecuteChanged();
@@ -654,6 +672,15 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
 
     private void OnServerExited(ServerExitInfo info)
     {
+        if (info.Kind == ServerExitKind.EndedByServer)
+        {
+            SetNotice(
+                NoticeSeverity.Informational,
+                "サーバーが終了しました",
+                "試合の終了などにより、サーバーが自分で終了しました。続けて遊ぶ場合は「サーバー起動」を押してください。");
+            return;
+        }
+
         if (!info.IsAbnormal)
         {
             IsNoticeOpen = false;

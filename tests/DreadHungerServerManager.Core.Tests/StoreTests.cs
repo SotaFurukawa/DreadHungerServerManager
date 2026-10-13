@@ -60,6 +60,63 @@ public sealed class StoreTests : IDisposable
     }
 
     [Fact]
+    public void SettingsFromVersion020_WithoutCloudSection_LoadWithCloudDisabled()
+    {
+        Directory.CreateDirectory(_directory);
+        var path = Path.Combine(_directory, "settings.json");
+        File.WriteAllText(path, """
+            {
+              "schemaVersion": 1,
+              "serverExecutablePath": "C:\\DreadHunger\\WindowsServer\\DreadHungerServer.exe",
+              "game": { "map": "Expanse", "maxPlayers": 8, "thralls": 2 },
+              "confirmBeforeStop": true
+            }
+            """);
+
+        var loaded = new JsonAppSettingsStore(path).Load();
+
+        Assert.Null(loaded.Warning);
+        Assert.Equal(CloudSettings.Default, loaded.Value.Cloud);
+        Assert.False(loaded.Value.Cloud.IsConfigured);
+        Assert.Null(loaded.Value.Cloud.TryGetInstanceRef());
+    }
+
+    [Fact]
+    public void CloudSettings_RoundTripWithoutSecrets()
+    {
+        var path = Path.Combine(_directory, "settings.json");
+        var store = new JsonAppSettingsStore(path);
+        var settings = AppSettings.Default with
+        {
+            Cloud = CloudSettings.Default with { InstanceId = "i-0123456789abcdef0", ProfileName = "dread-hunger", IdleTimeoutMinutes = 30 },
+        };
+
+        store.Save(settings);
+        var loaded = store.Load();
+
+        Assert.Equal(settings, loaded.Value);
+        Assert.Equal(new CloudInstanceRef("ap-northeast-1", "i-0123456789abcdef0"), loaded.Value.Cloud.TryGetInstanceRef());
+        var json = File.ReadAllText(path);
+        Assert.DoesNotContain("isConfigured", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void CloudSettings_AreValidatedAndNormalized()
+    {
+        var invalid = CloudSettings.Default with { InstanceId = "i-XYZ", Region = "Tokyo", ProfileName = "bad name" };
+
+        Assert.Equal(3, invalid.Validate().Count);
+        Assert.Null(invalid.TryGetInstanceRef());
+
+        var normalized = (CloudSettings.Default with { IdleTimeoutMinutes = 0, MaxRuntimeHours = 100, ServerId = "", ProfileName = " " }).Normalize();
+        Assert.Equal(CloudSettings.MinIdleTimeoutMinutes, normalized.IdleTimeoutMinutes);
+        Assert.Equal(CloudSettings.MaxMaxRuntimeHours, normalized.MaxRuntimeHours);
+        Assert.Equal(CloudSettings.DefaultServerId, normalized.ServerId);
+        Assert.Null(normalized.ProfileName);
+    }
+
+    [Fact]
     public void OutOfRangeOptions_AreNormalized()
     {
         var normalized = (AppSettings.Default with { GracefulStopTimeoutSeconds = 1, MaxLogLines = 10 }).Normalize();

@@ -1,11 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- UIに依存しないサーバー管理ロジック（モデル・設定・プロセス管理）。
-       将来のEC2連携やDiscord Bot、複数サーバー管理からもこのプロジェクトを再利用する。 -->
+  <!-- UIに依存しないサーバー管理ロジック（モデル・設定・プロセス管理・クラウド操作の抽象）。
+       GUI・EC2上のHost・Discord Bot（AWS Lambda上のLinux）から共通で使う。
+       net10.0 版にはWindows専用の部分（プロセス管理・ログ追尾・Win32呼び出し）を含めない。 -->
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$([MSBuild]::GetTargetPlatformIdentifier($(TargetFramework)))' != 'windows'">
+    <Compile Remove="Interop\**" />
+    <Compile Remove="Services\ServerProcessManager.cs" />
+    <Compile Remove="Services\LogFileTailer.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="DreadHungerServerManager.Core.Tests" />

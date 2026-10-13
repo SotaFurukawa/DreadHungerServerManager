@@ -7,40 +7,6 @@ using DreadHungerServerManager.Core.Models;
 
 namespace DreadHungerServerManager.Core.Services;
 
-public sealed record ServerLaunchRequest
-{
-    public required string ExecutablePath { get; init; }
-
-    public required string Arguments { get; init; }
-
-    public string? LogFilePath { get; init; }
-
-    public LogSourceMode LogSource { get; init; } = LogSourceMode.Auto;
-}
-
-public enum StopOutcome
-{
-    AlreadyStopped,
-    Exited,
-    TimedOut,
-
-    /// <summary>Ctrl+Cを送れるコンソールもウィンドウも見つからなかった。</summary>
-    SignalUnavailable,
-}
-
-public enum ServerStartError
-{
-    ExecutableNotFound,
-    AlreadyRunning,
-    LaunchFailed,
-}
-
-public sealed class ServerStartException(ServerStartError error, string message, Exception? innerException = null)
-    : Exception(message, innerException)
-{
-    public ServerStartError Error { get; } = error;
-}
-
 public sealed class ServerProcessManagerOptions
 {
     /// <summary>
@@ -55,44 +21,6 @@ public sealed class ServerProcessManagerOptions
 
     /// <summary>起動済みサーバーを検出したとき、ログ画面に表示する直近の行数。</summary>
     public int AttachReplayLineCount { get; init; } = 200;
-}
-
-/// <summary>
-/// 1台のDread Hungerサーバーのプロセスを管理する。UIスレッドを前提にせず、イベントは任意のスレッドから発生する。
-/// 複数サーバー管理に拡張する場合は、サーバーごとにこのクラスのインスタンスを持つ。
-/// </summary>
-public interface IServerProcessManager : IDisposable
-{
-    ServerStatus Status { get; }
-
-    event EventHandler? StatusChanged;
-
-    event EventHandler<IReadOnlyList<ServerLogLine>>? LogReceived;
-
-    /// <summary>起動処理中から起動完了（ポート待受またはWaitingToStartを検出）に変わったとき。</summary>
-    event EventHandler? ServerReady;
-
-    event EventHandler<ServerExitInfo>? ServerExited;
-
-    IReadOnlyList<RunningServerProcess> FindRunningServers();
-
-    /// <summary>サーバーを起動する。失敗時は <see cref="ServerStartException"/>。</summary>
-    void Start(ServerLaunchRequest request);
-
-    /// <summary>このアプリ以外で起動済みのサーバーを検出して管理下に置く。見つからなければnull。</summary>
-    RunningServerProcess? AttachToRunningServer(string? logFilePathOverride, LogSourceMode logSource);
-
-    /// <summary>Ctrl+Cで安全な終了を要求し、終了を待つ。TimedOutの場合は停止処理中のまま。</summary>
-    Task<StopOutcome> StopAsync(TimeSpan gracefulTimeout, CancellationToken cancellationToken = default);
-
-    /// <summary>TimedOut後に停止を取りやめ、稼働中の状態へ戻す。</summary>
-    void CancelStop();
-
-    /// <summary>プロセスツリーごと強制終了する。</summary>
-    Task<bool> KillAsync(TimeSpan timeout);
-
-    /// <summary>サーバーを止めずに管理だけをやめる（アプリ終了時に「残して終了」を選んだ場合）。</summary>
-    void Detach();
 }
 
 public sealed class ServerProcessManager : IServerProcessManager
@@ -581,16 +509,23 @@ public sealed class ServerProcessManager : IServerProcessManager
             var startedDuringStartup = _status.State == ServerState.Starting
                 || (session.StopRequested && session.StateBeforeStop == ServerState.Starting);
             var uptime = _status.StartedAt is { } startedAt ? DateTimeOffset.Now - startedAt : (TimeSpan?)null;
-            info = new ServerExitInfo(exitCode, session.StopRequested, startedDuringStartup, uptime);
+            var kind = session.StopRequested ? ServerExitKind.Requested
+                : _status.ServerRequestedExit && exitCode is null or 0 ? ServerExitKind.EndedByServer
+                : ServerExitKind.Unexpected;
+            info = new ServerExitInfo(exitCode, session.StopRequested, startedDuringStartup, uptime, kind);
             _session = null;
             _status = ServerStatus.Stopped;
         }
 
         session.DisposeProcesses();
         session.Ended.TrySetResult();
-        if (info.WasRequested)
+        if (info.Kind == ServerExitKind.Requested)
         {
             EmitManagerLine("サーバーを停止しました。", LogLineKind.Manager);
+        }
+        else if (info.Kind == ServerExitKind.EndedByServer)
+        {
+            EmitManagerLine("試合の終了などにより、サーバーが自分で終了しました。", LogLineKind.Manager);
         }
         else
         {
@@ -643,6 +578,22 @@ public sealed class ServerProcessManager : IServerProcessManager
                 if (!status.IsWaitingToStart && ServerLogAnalyzer.IsWaitingToStart(line))
                 {
                     status = status with { IsWaitingToStart = true };
+                }
+
+                if (ServerLogAnalyzer.TryGetMatchState(line, out var matchState) && matchState != status.MatchState)
+                {
+                    status = status with { MatchState = matchState };
+                }
+
+                if (!status.ServerRequestedExit && ServerLogAnalyzer.IsServerExitRequest(line))
+                {
+                    status = status with { ServerRequestedExit = true };
+                }
+
+                // 標準出力とログファイルの両方に同じ行が出ることがあるため、人数はログファイル（無ければ標準出力）の一方だけで数える。
+                if (source == session.PlayerCountSource && session.Players.Process(line))
+                {
+                    status = status with { PlayerCount = session.Players.Count };
                 }
             }
 
@@ -864,6 +815,11 @@ public sealed class ServerProcessManager : IServerProcessManager
         public ServerState StateBeforeStop { get; set; }
 
         public bool FileLinesSeen { get; set; }
+
+        public PlayerTracker Players { get; } = new();
+
+        /// <summary>人数を数えるのに使うログの取得元。</summary>
+        public LogLineSource PlayerCountSource => LogSource == LogSourceMode.StandardOutput ? LogLineSource.StandardOutput : LogLineSource.LogFile;
 
         public TaskCompletionSource Ended { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
