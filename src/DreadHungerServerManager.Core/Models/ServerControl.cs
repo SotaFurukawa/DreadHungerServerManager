@@ -91,6 +91,18 @@ public sealed record ServerHeartbeat
     /// <summary>最後に処理した要求の結果。</summary>
     public ServerRequestResult? LastResult { get; init; }
 
+    /// <summary>常駐サービスが使っている自動停止の設定。自動停止が使えない（EC2 以外など）ならnull。</summary>
+    public AutoStopConfig? AutoStop { get; init; }
+
+    /// <summary>次の自動停止の予定時刻。予定がなければnull。</summary>
+    public DateTimeOffset? AutoStopAt { get; init; }
+
+    /// <summary>次の自動停止の理由（利用者向けの説明）。</summary>
+    public string? AutoStopReason { get; init; }
+
+    /// <summary>自動停止を実行中（ゲームサーバーと EC2 を止めている）。</summary>
+    public bool IsAutoStopping { get; init; }
+
     /// <summary>この時間より古い状態は、Host が止まっている（EC2 停止中・起動処理中など）とみなす。</summary>
     public static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(90);
 

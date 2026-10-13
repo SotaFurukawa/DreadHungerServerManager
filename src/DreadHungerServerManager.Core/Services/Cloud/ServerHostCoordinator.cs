@@ -52,6 +52,17 @@ public sealed class ServerHostOptions
     public string? InstanceId { get; init; }
 
     public string? HostVersion { get; init; }
+
+    /// <summary>EC2（Windows）が起動した時刻。最大稼働時間の起点。null なら常駐サービスの開始時刻を使う。</summary>
+    public DateTimeOffset? InstanceStartedAt { get; init; }
+
+    /// <summary>GUI から自動停止の設定が反映されていない場合に使う設定。</summary>
+    public AutoStopConfig DefaultAutoStop { get; init; } = AutoStopConfig.Default;
+
+    public TimeSpan AutoStopConfigRefreshInterval { get; init; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>EC2 の停止に失敗したとき、次に試すまでの間隔。</summary>
+    public TimeSpan AutoStopRetryInterval { get; init; } = TimeSpan.FromMinutes(5);
 }
 
 /// <summary>
@@ -60,6 +71,8 @@ public sealed class ServerHostOptions
 /// <item>起動時: 未処理の新しい要求があればそれを、なければ（自動起動が有効なら）前回の設定で起動する</item>
 /// <item>以降: 要求を定期的に確認し、状態が変わるたび・一定間隔ごとに状態を書き出す</item>
 /// <item>終了時: ゲームサーバーを安全に停止する</item>
+/// <item>自動停止（<paramref name="cloud"/> と <paramref name="self"/> を渡した場合）: 誰も遊んでいない状態や最大稼働時間を
+/// <see cref="AutoStopMonitor"/> で判定し、ゲームサーバーを止めてから自分の EC2 を停止する</item>
 /// </list>
 /// 要求の置き場所との通信に失敗しても止まらず、次の周期でやり直す。
 /// </summary>
@@ -68,7 +81,10 @@ public sealed class ServerHostCoordinator(
     IServerControlStore store,
     ServerHostOptions options,
     IServerHostEnvironment environment,
-    TimeProvider? timeProvider = null)
+    TimeProvider? timeProvider = null,
+    ICloudInstanceService? cloud = null,
+    CloudInstanceRef? self = null,
+    IAutoStopNotifier? notifier = null)
 {
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
     private DateTimeOffset _hostStartedAt;
@@ -78,6 +94,12 @@ public sealed class ServerHostCoordinator(
     private ServerRequestResult? _lastResult;
     private GameSettings? _currentSettings;
     private string? _lastExitMessage;
+    private AutoStopMonitor? _autoStop;
+    private AutoStopConfig _autoStopConfig = options.DefaultAutoStop.Normalize();
+    private AutoStopPlan? _autoStopPlan;
+    private DateTimeOffset _autoStopConfigReadAt = DateTimeOffset.MinValue;
+    private DateTimeOffset _autoStopRetryAt = DateTimeOffset.MinValue;
+    private bool _isAutoStopping;
 
     private IServerProcessManager Manager => controller.Manager;
 
@@ -87,6 +109,14 @@ public sealed class ServerHostCoordinator(
         Manager.StatusChanged += (_, _) => _dirty = true;
         Manager.ServerExited += (_, info) => _lastExitMessage = DescribeExit(info);
         environment.Log(HostLogLevel.Info, $"常駐サービスを開始しました（サーバーID: {options.ServerId}、インスタンス: {options.InstanceId ?? "不明"}）。");
+        if (cloud is not null && self is not null)
+        {
+            _autoStop = new AutoStopMonitor(options.InstanceStartedAt ?? _hostStartedAt, _hostStartedAt);
+        }
+        else
+        {
+            environment.Log(HostLogLevel.Info, "EC2 の情報がないため、自動停止は使いません。");
+        }
 
         var previous = await TryStoreAsync(() => store.GetHeartbeatAsync(options.ServerId, stoppingToken), "前回の状態の読み込み");
         _lastResult = previous?.LastResult;
@@ -110,6 +140,8 @@ public sealed class ServerHostCoordinator(
                 {
                     await ProcessAsync(request, stoppingToken);
                 }
+
+                await CheckAutoStopAsync(stoppingToken);
 
                 if (_dirty || _time.GetUtcNow() - _lastPublishedAt >= options.HeartbeatInterval)
                 {
@@ -151,6 +183,7 @@ public sealed class ServerHostCoordinator(
     {
         environment.Log(HostLogLevel.Info, $"要求を受け付けました: {request.Action}（{request.RequestedBy}、ID {request.RequestId}）");
         _activeRequestId = request.RequestId;
+        _autoStop?.RecordActivity(_time.GetUtcNow());
         await PublishAsync(cancellationToken);
 
         (bool Succeeded, string Message) outcome;
@@ -227,6 +260,7 @@ public sealed class ServerHostCoordinator(
         _currentSettings = settings;
         _lastExitMessage = null;
         _dirty = true;
+        _autoStop?.RecordActivity(_time.GetUtcNow());
         if (await controller.WaitForReadyAsync(options.ReadyTimeout, cancellationToken))
         {
             environment.SaveLastSettings(settings);
@@ -249,6 +283,101 @@ public sealed class ServerHostCoordinator(
         return result == StopResult.Stopped
             ? (true, "サーバーを停止しました。")
             : (false, "サーバーを停止できませんでした（強制終了にも失敗しました）。");
+    }
+
+    /// <summary>自動停止の判定。設定は定期的に読み直す（GUI から反映された設定が優先）。</summary>
+    private async Task CheckAutoStopAsync(CancellationToken cancellationToken)
+    {
+        if (_autoStop is null || _isAutoStopping)
+        {
+            return;
+        }
+
+        var now = _time.GetUtcNow();
+        if (now - _autoStopConfigReadAt >= options.AutoStopConfigRefreshInterval)
+        {
+            _autoStopConfigReadAt = now;
+            if (await TryStoreAsync(() => store.GetAutoStopConfigAsync(options.ServerId, cancellationToken), "自動停止の設定の読み込み") is { } config
+                && config.Normalize() is var normalized
+                && normalized with { UpdatedAt = null, UpdatedBy = null } != _autoStopConfig with { UpdatedAt = null, UpdatedBy = null })
+            {
+                _autoStopConfig = normalized;
+                _dirty = true;
+                environment.Log(HostLogLevel.Info, $"自動停止の設定を反映しました: {normalized.Describe()}（{normalized.UpdatedBy ?? "不明"}）");
+            }
+        }
+
+        var status = Manager.Status;
+        if (status.State == ServerState.Starting)
+        {
+            _autoStop.RecordActivity(now);
+        }
+
+        var decision = _autoStop.Evaluate(status.State == ServerState.Running ? status.PlayerCount : 0, _autoStopConfig, now);
+        if (decision.Plan != _autoStopPlan)
+        {
+            _autoStopPlan = decision.Plan;
+            _dirty = true;
+        }
+
+        if (decision.Warning is { } remaining && decision.Plan is { } warned)
+        {
+            environment.Log(HostLogLevel.Warning, $"あと{remaining.TotalMinutes:0}分で EC2 を自動停止します（{warned.ReasonText}）。");
+            await NotifyAsync(() => notifier!.NotifyWarningAsync(warned, remaining, cancellationToken));
+        }
+
+        if (decision.ShouldStop && decision.Plan is { } plan && now >= _autoStopRetryAt)
+        {
+            await AutoStopAsync(plan, cancellationToken);
+        }
+    }
+
+    private async Task AutoStopAsync(AutoStopPlan plan, CancellationToken cancellationToken)
+    {
+        _autoStopRetryAt = _time.GetUtcNow() + options.AutoStopRetryInterval;
+        _isAutoStopping = true;
+        environment.Log(HostLogLevel.Info, $"EC2 を自動停止します（{plan.ReasonText}）。");
+        await NotifyAsync(() => notifier!.NotifyStoppingAsync(plan, cancellationToken));
+        await PublishAsync(cancellationToken);
+
+        try
+        {
+            await StopCoreAsync();
+        }
+        catch (OperationInProgressException ex)
+        {
+            environment.Log(HostLogLevel.Warning, ex.Message);
+        }
+
+        try
+        {
+            await cloud!.StopAsync(self!, cancellationToken);
+            environment.Log(HostLogLevel.Info, "EC2 の停止を要求しました。まもなく Windows がシャットダウンします。");
+        }
+        catch (CloudOperationException ex)
+        {
+            _isAutoStopping = false;
+            environment.Log(HostLogLevel.Error, $"EC2 を停止できませんでした（{options.AutoStopRetryInterval.TotalMinutes:0}分後に再試行します）: {ex.Message}");
+        }
+
+        await PublishAsync(cancellationToken);
+    }
+
+    private async Task NotifyAsync(Func<Task> notify)
+    {
+        if (notifier is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await notify();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            environment.Log(HostLogLevel.Warning, $"自動停止の通知を送れませんでした: {ex.Message}");
+        }
     }
 
     private async Task ShutdownAsync()
@@ -293,6 +422,10 @@ public sealed class ServerHostCoordinator(
             LastExitMessage = _lastExitMessage,
             ActiveRequestId = _activeRequestId,
             LastResult = _lastResult,
+            AutoStop = _autoStop is null ? null : _autoStopConfig,
+            AutoStopAt = _autoStopPlan?.StopAt,
+            AutoStopReason = _autoStopPlan?.ReasonText,
+            IsAutoStopping = _isAutoStopping,
         };
         if (await TryStoreAsync(async () =>
             {

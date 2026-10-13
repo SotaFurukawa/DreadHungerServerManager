@@ -330,6 +330,12 @@ public sealed class ServerHostCoordinatorTests
                 return true;
             });
 
+        public Task<AutoStopConfig?> GetAutoStopConfigAsync(string serverId, CancellationToken cancellationToken = default) =>
+            MaybeFail(() => inner.GetAutoStopConfigAsync(serverId, cancellationToken));
+
+        public Task PutAutoStopConfigAsync(string serverId, AutoStopConfig config, CancellationToken cancellationToken = default) =>
+            inner.PutAutoStopConfigAsync(serverId, config, cancellationToken);
+
         private Task<T> MaybeFail<T>(Func<Task<T>> action)
         {
             if (FailuresLeft > 0)

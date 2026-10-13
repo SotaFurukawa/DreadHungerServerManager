@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.ServiceProcess;
 using DreadHungerServerManager.Core.Configuration;
+using Microsoft.Win32;
 
 namespace DreadHungerServerManager.Host;
 
@@ -36,6 +37,14 @@ public static class ServiceInstaller
             return 0;
         }
 
+        // 以前の「現在のユーザー用」のインストールを取り除くときに、すべてのユーザー用の常駐サービスまで解除しないよう、
+        // 登録されているのが自分自身の場合だけ解除する。
+        if (RegisteredExecutable() is { } registered && !IsSamePath(registered, Environment.ProcessPath))
+        {
+            Console.WriteLine($"常駐サービスは別の場所（{registered}）に登録されているため、解除しません。");
+            return 0;
+        }
+
         Stop();
         return Sc("delete", HostService.Name);
     }
@@ -55,6 +64,24 @@ public static class ServiceInstaller
         catch (Exception ex) when (ex is InvalidOperationException or System.ServiceProcess.TimeoutException or System.ComponentModel.Win32Exception)
         {
             Console.Error.WriteLine($"サービスを停止できませんでした: {ex.Message}");
+        }
+    }
+
+    private static string? RegisteredExecutable()
+    {
+        using var key = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{HostService.Name}");
+        return (key?.GetValue("ImagePath") as string)?.Trim().Trim('"');
+    }
+
+    private static bool IsSamePath(string left, string? right)
+    {
+        try
+        {
+            return right is not null && string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
         }
     }
 

@@ -258,6 +258,75 @@
                 </StackPanel>
             </Border>
 
+            <!-- 自動停止 -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="10">
+                    <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="自動停止（料金の節約）" />
+                    <Grid ColumnSpacing="12" RowSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <CheckBox
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="IdleShutdownCheckBox"
+                            Content="誰も遊んでいない状態が続いたら停止"
+                            IsChecked="{x:Bind Cloud.IdleShutdownEnabled, Mode=TwoWay}" />
+                        <NumberBox
+                            Grid.Column="1"
+                            Width="140"
+                            AutomationProperties.Name="停止までの時間（分）"
+                            Maximum="240"
+                            Minimum="5"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind Cloud.IdleTimeoutMinutes, Mode=TwoWay}" />
+                        <TextBlock
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Text="分" />
+                        <CheckBox
+                            Grid.Row="1"
+                            VerticalAlignment="Center"
+                            Content="起動から一定時間で停止（最大稼働時間）"
+                            IsChecked="{x:Bind Cloud.MaxRuntimeEnabled, Mode=TwoWay}" />
+                        <NumberBox
+                            Grid.Row="1"
+                            Grid.Column="1"
+                            Width="140"
+                            AutomationProperties.Name="最大稼働時間（時間）"
+                            Maximum="24"
+                            Minimum="1"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind Cloud.MaxRuntimeHours, Mode=TwoWay}" />
+                        <TextBlock
+                            Grid.Row="1"
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Text="時間" />
+                    </Grid>
+                    <TextBlock
+                        Style="{StaticResource SecondaryTextStyle}"
+                        Text="「誰も遊んでいない」は、ゲームサーバーが止まったまま（起動していない・試合が終わって終了した）か、参加者が0人の状態です。ゲームサーバーの起動・操作・参加があると数え直します。最大稼働時間は試合中でも停止します（30分前・10分前・5分前に警告）。どちらも、ゲームサーバーを安全に止めてから EC2 を停止します。"
+                        TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button
+                            AutomationProperties.AutomationId="ApplyAutoStopButton"
+                            Command="{x:Bind Cloud.ApplyAutoStopCommand}"
+                            Content="EC2 に反映" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Style="{StaticResource SecondaryTextStyle}"
+                            Text="{x:Bind Cloud.AppliedAutoStopText, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- 接続設定 -->
             <Border Style="{StaticResource CardBorderStyle}">
                 <StackPanel Spacing="12">

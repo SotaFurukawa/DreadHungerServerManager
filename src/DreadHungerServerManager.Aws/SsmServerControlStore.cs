@@ -11,6 +11,7 @@ namespace DreadHungerServerManager.Aws;
 /// <list type="bullet">
 /// <item><c>/dhsm/{サーバーID}/request</c>: GUI・Discord Bot が書き、EC2 上の常駐サービスが読む</item>
 /// <item><c>/dhsm/{サーバーID}/status</c>: 常駐サービスが書き、GUI・Discord Bot が読む</item>
+/// <item><c>/dhsm/{サーバーID}/config</c>: 自動停止の設定。GUI が書き、常駐サービスが読む</item>
 /// </list>
 /// 秘密情報は置かない（ゲーム設定と状態だけ）。
 /// </summary>
@@ -21,6 +22,8 @@ public sealed class SsmServerControlStore(AwsClientFactory clients, string regio
     public static string RequestParameterName(string serverId) => $"{ParameterPrefix}/{serverId}/request";
 
     public static string StatusParameterName(string serverId) => $"{ParameterPrefix}/{serverId}/status";
+
+    public static string ConfigParameterName(string serverId) => $"{ParameterPrefix}/{serverId}/config";
 
     public async Task<ServerControlRequest?> GetRequestAsync(string serverId, CancellationToken cancellationToken = default) =>
         ServerControlJson.Deserialize<ServerControlRequest>(await GetAsync(RequestParameterName(serverId), cancellationToken).ConfigureAwait(false));
@@ -33,6 +36,12 @@ public sealed class SsmServerControlStore(AwsClientFactory clients, string regio
 
     public Task PutHeartbeatAsync(string serverId, ServerHeartbeat heartbeat, CancellationToken cancellationToken = default) =>
         PutAsync(StatusParameterName(serverId), ServerControlJson.Serialize(heartbeat), cancellationToken);
+
+    public async Task<AutoStopConfig?> GetAutoStopConfigAsync(string serverId, CancellationToken cancellationToken = default) =>
+        ServerControlJson.Deserialize<AutoStopConfig>(await GetAsync(ConfigParameterName(serverId), cancellationToken).ConfigureAwait(false));
+
+    public Task PutAutoStopConfigAsync(string serverId, AutoStopConfig config, CancellationToken cancellationToken = default) =>
+        PutAsync(ConfigParameterName(serverId), ServerControlJson.Serialize(config), cancellationToken);
 
     private async Task<string?> GetAsync(string name, CancellationToken cancellationToken)
     {

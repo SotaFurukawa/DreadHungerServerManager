@@ -19,6 +19,11 @@ public interface IServerControlStore
     Task<ServerHeartbeat?> GetHeartbeatAsync(string serverId, CancellationToken cancellationToken = default);
 
     Task PutHeartbeatAsync(string serverId, ServerHeartbeat heartbeat, CancellationToken cancellationToken = default);
+
+    /// <summary>自動停止の設定（GUI が書き、常駐サービスが読む）。なければnull。</summary>
+    Task<AutoStopConfig?> GetAutoStopConfigAsync(string serverId, CancellationToken cancellationToken = default);
+
+    Task PutAutoStopConfigAsync(string serverId, AutoStopConfig config, CancellationToken cancellationToken = default);
 }
 
 /// <summary>メモリ上の <see cref="IServerControlStore"/>（テスト・画面確認用）。</summary>
@@ -26,6 +31,7 @@ public sealed class InMemoryServerControlStore : IServerControlStore
 {
     private readonly ConcurrentDictionary<string, ServerControlRequest> _requests = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, ServerHeartbeat> _heartbeats = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, AutoStopConfig> _autoStopConfigs = new(StringComparer.Ordinal);
 
     public Task<ServerControlRequest?> GetRequestAsync(string serverId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_requests.TryGetValue(serverId, out var request) ? request : null);
@@ -42,6 +48,15 @@ public sealed class InMemoryServerControlStore : IServerControlStore
     public Task PutHeartbeatAsync(string serverId, ServerHeartbeat heartbeat, CancellationToken cancellationToken = default)
     {
         _heartbeats[serverId] = heartbeat;
+        return Task.CompletedTask;
+    }
+
+    public Task<AutoStopConfig?> GetAutoStopConfigAsync(string serverId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_autoStopConfigs.TryGetValue(serverId, out var config) ? config : null);
+
+    public Task PutAutoStopConfigAsync(string serverId, AutoStopConfig config, CancellationToken cancellationToken = default)
+    {
+        _autoStopConfigs[serverId] = config;
         return Task.CompletedTask;
     }
 }

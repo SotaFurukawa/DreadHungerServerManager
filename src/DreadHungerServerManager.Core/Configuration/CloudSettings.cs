@@ -38,10 +38,13 @@ public sealed partial record CloudSettings
     /// <summary>EC2 の起動後に、Dread Hunger サーバーを自動で起動する（EC2 上の Host が行う）。</summary>
     public bool AutoStartGameServer { get; init; } = true;
 
-    /// <summary>誰も遊んでいない状態が続いたら、サーバーと EC2 を停止する。</summary>
+    /// <summary>
+    /// 誰も遊んでいない状態（ゲームサーバーが止まったまま、または参加者0人）が続いたら、サーバーと EC2 を停止する。
+    /// GUI ではこの値を編集して EC2 に反映（Parameter Store）し、常駐サービスは反映された設定がなければこの値を使う。
+    /// </summary>
     public bool IdleShutdownEnabled { get; init; } = true;
 
-    public int IdleTimeoutMinutes { get; init; } = 15;
+    public int IdleTimeoutMinutes { get; init; } = 30;
 
     /// <summary>料金事故の防止のため、EC2 の起動から一定時間で停止する。</summary>
     public bool MaxRuntimeEnabled { get; init; } = true;
@@ -52,6 +55,14 @@ public sealed partial record CloudSettings
     public bool IsConfigured => !string.IsNullOrWhiteSpace(InstanceId);
 
     public static CloudSettings Default { get; } = new();
+
+    public AutoStopConfig ToAutoStopConfig() => new AutoStopConfig
+    {
+        IdleShutdownEnabled = IdleShutdownEnabled,
+        IdleTimeoutMinutes = IdleTimeoutMinutes,
+        MaxRuntimeEnabled = MaxRuntimeEnabled,
+        MaxRuntimeHours = MaxRuntimeHours,
+    }.Normalize();
 
     /// <summary>設定済みなら操作対象を返す。未設定や形式の誤りがあればnull。</summary>
     public CloudInstanceRef? TryGetInstanceRef() =>

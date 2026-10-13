@@ -77,6 +77,7 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         RemoteStartCommand = new AsyncRelayCommand(() => SendRemoteAsync(ServerControlAction.Start), () => CanOperateRemote && RemoteState == ServerState.Stopped);
         RemoteRestartCommand = new AsyncRelayCommand(() => SendRemoteAsync(ServerControlAction.Restart), () => CanOperateRemote && RemoteState != ServerState.Stopped);
         RemoteStopCommand = new AsyncRelayCommand(() => SendRemoteAsync(ServerControlAction.Stop), () => CanOperateRemote && RemoteState != ServerState.Stopped);
+        ApplyAutoStopCommand = new AsyncRelayCommand(ApplyAutoStopAsync, () => CanOperate);
 
         ReloadProfiles();
         _refreshTimer = new Timer(_ => _uiContext.Post(_ => OnRefreshTick(), null), null, TimeSpan.FromSeconds(1), RefreshInterval);
@@ -107,6 +108,63 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
     public AsyncRelayCommand RemoteRestartCommand { get; }
 
     public AsyncRelayCommand RemoteStopCommand { get; }
+
+    public AsyncRelayCommand ApplyAutoStopCommand { get; }
+
+    // ---- 自動停止（編集はこの PC の設定に保存し、「EC2 に反映」で常駐サービスへ渡す） ----
+
+    public bool IdleShutdownEnabled
+    {
+        get => _settings.IdleShutdownEnabled;
+        set => UpdateSettings(_settings with { IdleShutdownEnabled = value });
+    }
+
+    public double IdleTimeoutMinutes
+    {
+        get => _settings.IdleTimeoutMinutes;
+        set
+        {
+            if (!double.IsNaN(value))
+            {
+                UpdateSettings(_settings with { IdleTimeoutMinutes = Math.Clamp((int)Math.Round(value), AutoStopConfig.MinIdleTimeoutMinutes, AutoStopConfig.MaxIdleTimeoutMinutes) });
+            }
+        }
+    }
+
+    public bool MaxRuntimeEnabled
+    {
+        get => _settings.MaxRuntimeEnabled;
+        set => UpdateSettings(_settings with { MaxRuntimeEnabled = value });
+    }
+
+    public double MaxRuntimeHours
+    {
+        get => _settings.MaxRuntimeHours;
+        set
+        {
+            if (!double.IsNaN(value))
+            {
+                UpdateSettings(_settings with { MaxRuntimeHours = Math.Clamp((int)Math.Round(value), AutoStopConfig.MinMaxRuntimeHours, AutoStopConfig.MaxMaxRuntimeHours) });
+            }
+        }
+    }
+
+    /// <summary>EC2 上の常駐サービスが今使っている自動停止の設定。</summary>
+    public string AppliedAutoStopText
+    {
+        get
+        {
+            if (_heartbeat?.AutoStop is not { } applied || !IsRemoteAlive)
+            {
+                return "EC2 上で使われている設定は、EC2 と常駐サービスが動いているときに確認できます。";
+            }
+
+            var pending = applied with { UpdatedAt = null, UpdatedBy = null } != _settings.ToAutoStopConfig()
+                ? "　※ 上の設定はまだ反映されていません"
+                : "";
+            return $"EC2 上で使用中: {applied.Describe()}{pending}";
+        }
+    }
 
     // ---- 接続設定 ----
 
@@ -285,6 +343,16 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
                 parts.Add(exit);
             }
 
+            if (heartbeat.IsAutoStopping)
+            {
+                parts.Add("自動停止を実行中");
+            }
+            else if (heartbeat.AutoStopAt is { } stopAt && IsRemoteAlive)
+            {
+                var minutes = Math.Max(0, (int)Math.Ceiling((stopAt - DateTimeOffset.UtcNow).TotalMinutes));
+                parts.Add($"自動停止予定 {stopAt.ToLocalTime():HH:mm}（あと{minutes}分・{heartbeat.AutoStopReason}）");
+            }
+
             parts.Add($"更新 {heartbeat.UpdatedAt.ToLocalTime():HH:mm:ss}");
             if (!IsRemoteAlive)
             {
@@ -443,9 +511,31 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(RemoteDetailText));
         OnPropertyChanged(nameof(RemoteLastResultText));
         OnPropertyChanged(nameof(RemoteLaunchSettingsText));
+        OnPropertyChanged(nameof(AppliedAutoStopText));
         RemoteStartCommand.NotifyCanExecuteChanged();
         RemoteRestartCommand.NotifyCanExecuteChanged();
         RemoteStopCommand.NotifyCanExecuteChanged();
+        ApplyAutoStopCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>自動停止の設定を Parameter Store に書き、EC2 上の常駐サービスに使わせる（1分以内に読み込まれる）。</summary>
+    private async Task ApplyAutoStopAsync()
+    {
+        if (_createControlStore(_settings) is not { } store)
+        {
+            return;
+        }
+
+        var config = _settings.ToAutoStopConfig() with { UpdatedAt = DateTimeOffset.UtcNow, UpdatedBy = _requester };
+        try
+        {
+            await store.PutAutoStopConfigAsync(_settings.ServerId, config);
+            _ui.ShowToast($"自動停止の設定を EC2 に反映しました（常駐サービスは1分以内に読み込みます）: {config.Describe()}");
+        }
+        catch (CloudOperationException ex)
+        {
+            await _ui.ShowErrorAsync("自動停止の設定を反映できませんでした", Describe(ex));
+        }
     }
 
     /// <summary>
@@ -617,6 +707,11 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(InstanceId));
         OnPropertyChanged(nameof(ProfileName));
         OnPropertyChanged(nameof(GamePort));
+        OnPropertyChanged(nameof(IdleShutdownEnabled));
+        OnPropertyChanged(nameof(IdleTimeoutMinutes));
+        OnPropertyChanged(nameof(MaxRuntimeEnabled));
+        OnPropertyChanged(nameof(MaxRuntimeHours));
+        OnPropertyChanged(nameof(AppliedAutoStopText));
         OnPropertyChanged(nameof(SettingsErrorText));
         OnPropertyChanged(nameof(HasSettingsError));
         OnPropertyChanged(nameof(IsConfigured));

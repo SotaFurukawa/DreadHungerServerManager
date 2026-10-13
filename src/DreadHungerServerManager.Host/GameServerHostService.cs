@@ -1,5 +1,6 @@
 using DreadHungerServerManager.Aws;
 using DreadHungerServerManager.Core.Configuration;
+using DreadHungerServerManager.Core.Models;
 using DreadHungerServerManager.Core.Services;
 using DreadHungerServerManager.Core.Services.Cloud;
 
@@ -37,6 +38,7 @@ public sealed class GameServerHostService(HostCommandLine commandLine) : Backgro
         var environment = new HostEnvironment(settingsStore, settings, log);
         using var awsClients = new AwsClientFactory();
         string? instanceId = null;
+        CloudInstanceRef? self = null;
         IServerControlStore store;
         if (commandLine.UseLocalStore)
         {
@@ -48,6 +50,11 @@ public sealed class GameServerHostService(HostCommandLine commandLine) : Backgro
             var identity = await GetInstanceIdentityAsync(environment, stoppingToken);
             instanceId = identity?.InstanceId;
             var region = identity?.Region ?? settings.Cloud.Region;
+            if (identity is not null)
+            {
+                // 自動停止で自分自身（この EC2）を止めるために使う。
+                self = new CloudInstanceRef(identity.Region, identity.InstanceId);
+            }
 
             // EC2 上では IAM ロールで認証する。EC2 以外（動作確認）では設定のプロファイルを使う。
             awsClients.ProfileName = identity is null ? settings.Cloud.ProfileName : null;
@@ -66,8 +73,14 @@ public sealed class GameServerHostService(HostCommandLine commandLine) : Backgro
                 GracefulStopTimeout = TimeSpan.FromSeconds(settings.GracefulStopTimeoutSeconds),
                 InstanceId = instanceId,
                 HostVersion = HostInfo.Version,
+
+                // Windows の起動時刻を EC2 の起動時刻とみなす（最大稼働時間の起点）。
+                InstanceStartedAt = DateTimeOffset.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64),
+                DefaultAutoStop = settings.Cloud.ToAutoStopConfig(),
             },
-            environment);
+            environment,
+            cloud: self is null ? null : new AwsEc2InstanceService(awsClients),
+            self: self);
 
         try
         {
