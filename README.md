@@ -2,7 +2,7 @@
 
 Dread Hunger Dedicated Server（`DreadHungerServer.exe`）を、batファイルやPowerShellを使わずにGUIから起動・停止・監視するWindowsアプリです。見た目はShikiWariと同じWinUI 3（Fluentデザイン）です。
 
-現在のバージョンは **v0.4.0-preview.1** です（正本は `Directory.Build.props`）。
+現在のバージョンは **v0.4.0-preview.2** です（正本は `Directory.Build.props`）。
 
 ## できること
 
@@ -21,7 +21,7 @@ Dread Hunger Dedicated Server（`DreadHungerServer.exe`）を、batファイル�
 - EC2 用の常駐サービス（Windows サービス）。Windows にログインしなくても、EC2 の起動時にゲームサーバーを自動で起動し、GUI からの起動・再起動・停止の要求を処理する。GUI には EC2 上のゲームサーバーの状態（試合の状態・人数・稼働時間）を表示
 - 「AWS / Cloud」ページでマップ・ゲーム設定を選んで「EC2 起動」すると、EC2 の起動後にその設定でゲームサーバーが立ち上がるまで待って結果を表示
 - 自動停止: 誰も遊んでいない状態（ゲームサーバーが止まったまま、または参加者0人）が30分続いたら、または起動から6時間たったら、ゲームサーバーを止めてから EC2 を停止（時間は変更可）
-- Discord Bot（AWS Lambda）: `/start`（設定パネルまたは引数でマップ・人数・倍率を指定）・`/stop`・`/restart`・`/status`。使う人は EC2 の場所を意識せず、表示されるのは接続先のアドレスだけ。許可したユーザー・ロールだけが操作でき、自動停止の予告も Discord に届く
+- Discord Bot（AWS Lambda）: `/start`（設定パネルまたは引数でマップ・人数・倍率を指定）・`/stop`・`/restart`・`/status`。使う人は EC2 の場所を意識せず、表示されるのは接続先のアドレスだけ。Discord サーバーのメンバー全員（または許可したユーザー・ロールだけ）が操作でき、誰が何をしたかをログ用チャンネルに記録。自動停止の予告も Discord に届く
 - プリセット（標準: Standard / Short Game / Long Game、名前を付けて保存・読み込み・削除）
 - 最後の設定（マップ・各値・サーバーの場所など）を自動保存し、次回起動時に復元
 
@@ -279,7 +279,9 @@ Address: 203.0.113.10:7777
 Uptime: 00:00:12
 ```
 
-`/start`・`/stop`・`/restart` を使えるのは、許可したユーザー（またはロール）だけです。`/status` は既定で誰でも使えます。同時に2つの操作（`/start` を2人が同時に押した場合など）が来た場合は、後から来たほうを「Server operation already in progress」で断ります。誰が・いつ・何をしたかは CloudWatch Logs に記録されます（`"audit":true` の行）。
+`/start`・`/stop`・`/restart` を使える人は、Lambda の環境変数で決めます。**指定した Discord サーバーのメンバー全員**（`DHSM_ALLOWED_GUILD_IDS`）にするか、**特定のユーザー・ロールだけ**（`DHSM_ALLOWED_USER_IDS`・`DHSM_ALLOWED_ROLE_IDS`）にできます。ほかの Discord サーバーや DM からは使えません。`/status` は既定で誰でも使えます。同時に2つの操作（`/start` を2人が同時に押した場合など）が来た場合は、後から来たほうを「Server operation already in progress」で断ります。
+
+誰が・いつ・何をしたか（結果と、起動した設定）は、Discord のログ用チャンネル（6.）と CloudWatch Logs（`"audit":true` の行）に記録されます。
 
 ### 1. Discord のアプリケーションを作る
 
@@ -287,7 +289,7 @@ Uptime: 00:00:12
 2. **General Information** の **Application ID** と **Public Key** を控えます（どちらも秘密情報ではありません）。
 3. **Bot** → **Reset Token** で Bot Token を表示してコピーします。**Bot Token は秘密情報です。** コマンドの登録（4.）に1度使うだけなので、メモ帳などに保存せず、Lambda にも設定しません。
 4. **OAuth2** → **OAuth2 URL Generator** で `applications.commands` にチェックを入れ、下に出た URL をブラウザーで開いて、Bot を使う Discord サーバーに追加します。
-5. Discord の **ユーザー設定** → **詳細設定** → **開発者モード** をオンにします。サーバー名を右クリック →「サーバーIDをコピー」でサーバーIDを、自分（や操作を許可する人）を右クリック →「ユーザーIDをコピー」でユーザーIDを控えます。ロールで許可する場合は、**サーバー設定** → **ロール** でロールを右クリック →「ロールIDをコピー」します。
+5. Discord の **ユーザー設定** → **詳細設定** → **開発者モード** をオンにします。サーバー名を右クリック →「サーバーIDをコピー」でサーバーIDを控えます。特定の人だけに許可する場合は、その人を右クリック →「ユーザーIDをコピー」でユーザーIDを控えます。ロールで許可する場合は、**サーバー設定** → **ロール** でロールを右クリック →「ロールIDをコピー」します。
 
 ### 2. Lambda 用の IAM ロールを作る
 
@@ -347,15 +349,17 @@ Uptime: 00:00:12
    | `DISCORD_APPLICATION_ID` | 1. の Application ID |
    | `DISCORD_PUBLIC_KEY` | 1. の Public Key（64文字） |
    | `DHSM_INSTANCE_ID` | ゲームサーバーの EC2 のインスタンスID（`i-` で始まる） |
-   | `DHSM_ALLOWED_USER_IDS` | `/start` などを許可する Discord のユーザーID（複数はカンマ区切り） |
+   | `DHSM_ALLOWED_GUILD_IDS` | Discord サーバーのID。**そのサーバーのメンバー全員**が `/start` などを使える |
+   | `DHSM_ALLOWED_USER_IDS` | （任意）特定の人だけに許可する場合の Discord のユーザーID（複数はカンマ区切り） |
    | `DHSM_ALLOWED_ROLE_IDS` | （任意）許可するロールID。そのロールを持つ人は全員使える |
+   | `DHSM_AUDIT_WEBHOOK_URL` | （任意）誰が何をしたかを書き込むログ用チャンネルの Webhook URL（6.） |
    | `DHSM_NOTIFY_WEBHOOK_URL` | （任意）自動停止の予告などを送るチャンネルの Webhook URL（6.） |
    | `DHSM_REGION` | （任意）EC2 のリージョン。省略すると Lambda と同じリージョン |
    | `DHSM_STATUS_PUBLIC` | （任意）`false` にすると `/status` も許可した人だけ |
    | `DHSM_GAME_PORT` | （任意）表示するポート。既定 `7777` |
    | `DHSM_WATCHDOG_STALE_STOP_MINUTES` | （任意）EC2 が動いているのに常駐サービスが応答しない状態がこの分数続いたら EC2 を止める。既定 `30`、`0` で止めない |
 
-   `DHSM_ALLOWED_USER_IDS` と `DHSM_ALLOWED_ROLE_IDS` が両方とも空だと、誰も `/start` などを使えません（誰でも EC2 を起動できる状態にはしません）。**Bot Token はここに設定しません。**
+   サーバーのメンバー全員に使わせる場合は `DHSM_ALLOWED_GUILD_IDS` だけ、特定の人だけにする場合は `DHSM_ALLOWED_USER_IDS`（か `DHSM_ALLOWED_ROLE_IDS`）だけを設定します。3つとも空だと、誰も `/start` などを使えません（誰でも EC2 を起動できる状態にはしません）。**Bot Token はここに設定しません。**
 6. **設定** → **非同期呼び出し** → **編集** で、**再試行 = 0** にします（失敗時に EC2 の起動などが二重に行われないようにするため）。
 7. **トリガーを追加** → **EventBridge (CloudWatch Events)** → **新規ルールの作成** で、ルール名を `dread-hunger-bot-watchdog`、ルールタイプを **スケジュール式**、式を `rate(5 minutes)` にして追加します。5分ごとに、自動停止の予告・停止の通知と、常駐サービスが応答しない EC2 の停止を行います（Bot の初回応答が遅くなるのを防ぐ役目もあります）。
 8. 関数の概要に表示される **関数 URL**（`https://….lambda-url.ap-northeast-3.on.aws/`）をコピーします。
@@ -377,9 +381,16 @@ Uptime: 00:00:12
 2. `/start` → 設定パネルで「この設定で起動」を押します。チャンネルに進み具合（EC2 Starting… → Windows とゲームサーバーの起動待ち）が表示され、数分後に「Dread Hunger Server Online」とアドレスが表示されます。
 3. `/stop` → 「停止する」で、ゲームサーバーと EC2 が停止することを確認します。
 
-### 6. 通知用の Webhook（任意）
+### 6. 通知・ログ用の Webhook（任意）
 
-自動停止の予告（誰も遊んでいない: 5分前、最大稼働時間: 30分前・10分前・5分前）と、自動停止したことを Discord に投稿します。チャンネルの **設定（歯車）** → **連携サービス** → **ウェブフック** → **新しいウェブフック** で作成し、**ウェブフックURLをコピー** して `DHSM_NOTIFY_WEBHOOK_URL` に設定します。ウェブフック URL を知っている人は誰でもそのチャンネルに投稿できるため、Lambda の環境変数以外には書かないでください。
+チャンネルの **設定（歯車）** → **連携サービス** → **ウェブフック** → **新しいウェブフック** で作成し、**ウェブフックURLをコピー** して Lambda の環境変数に設定します。ウェブフック URL を知っている人は誰でもそのチャンネルに投稿できるため、Lambda の環境変数以外には書かないでください。
+
+| 環境変数 | 投稿する内容 |
+| --- | --- |
+| `DHSM_NOTIFY_WEBHOOK_URL` | 自動停止の予告（誰も遊んでいない: 5分前、最大稼働時間: 30分前・10分前・5分前）と、自動停止したこと。遊ぶ人が見るチャンネル向け |
+| `DHSM_AUDIT_WEBHOOK_URL` | 操作の記録。例: `📝 @Alice（Alice）が /start を実行 → ✅ 成功` と起動した設定。管理者だけが見られるチャンネル（例: `#bot-log`）を作って使うのがおすすめです |
+
+ログ用チャンネルでは、使った人をメンション形式で表示します（通知は飛びません）。表示名を変えても誰か分かります。2つに同じ URL を設定すれば、1つのチャンネルにまとめて投稿します。
 
 ## DreadHungerServer.exe の設定方法
 
@@ -561,7 +572,7 @@ AWS を使わずに「AWS / Cloud」ページを確認するには、起動引�
 - **「Parameter Store の … を使う権限がありません」**: 自宅の PC の IAM ユーザー、または EC2 の IAM ロールのポリシーに `ssm:GetParameter`・`ssm:PutParameter`（`/dhsm/default/*`）があるか確認してください。
 - **Discord で「Interactions Endpoint URL を検証できませんでした」と出る**: Lambda の環境変数 `DISCORD_PUBLIC_KEY` が Developer Portal の Public Key と一致しているか確認してください。Lambda の **モニタリング** → **CloudWatch Logs を表示** に「Bot の設定に誤りがあります」と原因が出ます。
 - **Discord で「アプリケーションが応答しませんでした」と出る**: Lambda が長く使われていなかった直後は、最初の応答が Discord の制限（3秒）に間に合わないことがあります。もう一度実行してください。続く場合は、「Discord Bot」の手順 3. の 7.（5分ごとのトリガー）とメモリ（1024 MB）を確認してください。
-- **Discord で「このコマンドを使う権限がありません」**: 自分のユーザーID（またはロールID）を Lambda の `DHSM_ALLOWED_USER_IDS`（`DHSM_ALLOWED_ROLE_IDS`）に追加してください。
+- **Discord で「このコマンドを使う権限がありません」**: Lambda の `DHSM_ALLOWED_GUILD_IDS` に Discord サーバーのIDが入っているか（特定の人だけにしている場合は `DHSM_ALLOWED_USER_IDS`・`DHSM_ALLOWED_ROLE_IDS` にその人が入っているか）確認してください。
 - **Discord で「Bot にサーバーを操作する権限がない」「Bot の接続先サーバーの設定に問題がある」**: Lambda の IAM ロールのポリシー、`DHSM_INSTANCE_ID`・`DHSM_REGION` を確認してください。詳しい原因は CloudWatch Logs の `cloud operation failed` の行に出ます。
 - **Discord にコマンドが出てこない**: `scripts\Register-DiscordCommands.ps1` のサーバーIDを確認し、Discord を再読み込み（Ctrl+R）してください。
 - **外部から接続できない**: Windows ファイアウォールと（EC2の場合は）セキュリティグループで、ゲームポート（既定 UDP 7777。`-port` で変えた場合はその番号）の受信を許可してください。

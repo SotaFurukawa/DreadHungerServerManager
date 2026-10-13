@@ -54,6 +54,16 @@ public sealed class SecurityTests
     }
 
     [Fact]
+    public void Authorizer_CanAllowEveryoneInOneDiscordServer()
+    {
+        var authorizer = new BotAuthorizer(new BotOptions { Instance = Instance, AllowedGuildIds = new HashSet<string> { "500" } });
+
+        Assert.True(authorizer.CanOperate(new BotUser("200", "Bob", [], "500")));
+        Assert.False(authorizer.CanOperate(new BotUser("200", "Bob", [], "501")));
+        Assert.False(authorizer.CanOperate(new BotUser("200", "Bob", [])));
+    }
+
+    [Fact]
     public void Authorizer_WithEmptyListsAllowsNobody()
     {
         var authorizer = new BotAuthorizer(new BotOptions { Instance = Instance });
@@ -130,6 +140,22 @@ public sealed class SecurityTests
 
         Assert.Null(configuration);
         Assert.Contains(errors, error => error.Contains("DHSM_ALLOWED_USER_IDS", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Configuration_CanAllowAWholeDiscordServer()
+    {
+        var configuration = BotConfiguration.FromEnvironment(Variables(new()
+        {
+            ["DHSM_ALLOWED_USER_IDS"] = null,
+            ["DHSM_ALLOWED_GUILD_IDS"] = "1200000000000000000",
+            ["DHSM_AUDIT_WEBHOOK_URL"] = "https://discord.com/api/webhooks/2/y",
+        }), out var errors);
+
+        Assert.Empty(errors);
+        Assert.Equal(["1200000000000000000"], configuration?.Options.AllowedGuildIds);
+        Assert.Empty(configuration!.Options.AllowedUserIds);
+        Assert.Equal("https://discord.com/api/webhooks/2/y", configuration.AuditWebhookUrl);
     }
 
     [Fact]

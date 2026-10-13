@@ -72,7 +72,7 @@ public sealed record DiscordInteraction
             Id = root["id"]?.GetValue<string>() ?? "",
             ApplicationId = root["application_id"]?.GetValue<string>() ?? "",
             Token = root["token"]?.GetValue<string>() ?? "",
-            User = new BotUser(user?["id"]?.GetValue<string>() ?? "", name, roles),
+            User = new BotUser(user?["id"]?.GetValue<string>() ?? "", name, roles, member is null ? null : root["guild_id"]?.GetValue<string>()),
             CommandName = type == (int)InteractionType.ApplicationCommand ? data?["name"]?.GetValue<string>() : null,
             Options = options,
             CustomId = data?["custom_id"]?.GetValue<string>(),

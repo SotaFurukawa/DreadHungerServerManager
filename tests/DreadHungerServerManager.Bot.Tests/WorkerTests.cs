@@ -39,6 +39,43 @@ public sealed class WorkerTests
     }
 
     [Fact]
+    public async Task Operations_AreWrittenToTheLogChannel()
+    {
+        await using var host = new TestHost();
+        await host.StartInstanceAndHostAsync();
+        var messenger = new RecordingMessenger();
+        var configuration = Configuration(host) with { AuditWebhookUrl = "https://discord.com/api/webhooks/2/y" };
+        var worker = new Worker(host.Workflows, messenger, configuration);
+
+        await worker.RunAsync(Item(WorkKind.Status, ReplyMode.Original));
+        await worker.RunAsync(Item(WorkKind.Restart, ReplyMode.Original, GameSettings.Default with { Map = GameMap.Departure }));
+        await worker.RunAsync(Item(WorkKind.Stop, ReplyMode.Followup));
+
+        Assert.All(messenger.Notifications, notification => Assert.Equal("https://discord.com/api/webhooks/2/y", notification.Url));
+        Assert.Collection(
+            messenger.Notifications,
+            restart =>
+            {
+                Assert.StartsWith("📝 <@100>（Alice）が /restart を実行 → ✅ 成功", restart.Content);
+                Assert.Contains("山頂・最大8人", restart.Content);
+            },
+            stop => Assert.Equal("📝 <@100>（Alice）が /stop を実行 → ✅ 成功", stop.Content));
+    }
+
+    [Fact]
+    public async Task FailedOperations_AreLoggedWithTheReason()
+    {
+        await using var host = new TestHost();
+        var messenger = new RecordingMessenger();
+
+        await new Worker(host.Workflows, messenger, Configuration(host) with { AuditWebhookUrl = "https://discord.com/api/webhooks/2/y" })
+            .RunAsync(Item(WorkKind.Restart, ReplyMode.Original, GameSettings.Default));
+
+        var (_, content) = Assert.Single(messenger.Notifications);
+        Assert.StartsWith("📝 <@100>（Alice）が /restart を実行 → ⚠️ 失敗: EC2 が稼働していません。", content);
+    }
+
+    [Fact]
     public async Task Failures_NeverShowWhereTheServerIs()
     {
         await using var host = new TestHost();

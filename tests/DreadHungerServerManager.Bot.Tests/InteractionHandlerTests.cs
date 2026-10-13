@@ -114,6 +114,32 @@ public sealed class InteractionHandlerTests
     }
 
     [Fact]
+    public async Task EveryoneInTheAllowedServer_CanStart()
+    {
+        var handler = new InteractionHandler(
+            Configuration(statusPublic: true) with
+            {
+                Options = Configuration(statusPublic: true).Options with { AllowedUserIds = new HashSet<string>(), AllowedRoleIds = new HashSet<string>(), AllowedGuildIds = new HashSet<string> { "500" } },
+            },
+            _queue,
+            _ => Task.FromResult(LastSettings),
+            _time);
+
+        async Task<JsonObject> SendFromAsync(string guildId)
+        {
+            var body = Command("start", "200", options: """[{"name":"map","value":"Departure"}]""", guildId: guildId);
+            var (signature, timestamp) = _keys.Sign(body, _time.GetUtcNow());
+            return Json(await handler.HandleAsync(body, signature, timestamp));
+        }
+
+        Assert.Equal(5, (await SendFromAsync("500"))["type"]?.GetValue<int>());
+        Assert.Equal(BotAuthorizer.DeniedMessage, (await SendFromAsync("501"))["data"]?["content"]?.GetValue<string>());
+        var item = Assert.Single(_queue.Items);
+        Assert.Equal("200", item.UserId);
+        Assert.Equal("Someone", item.UserName);
+    }
+
+    [Fact]
     public async Task AllowedRole_CanRestart()
     {
         var reply = Json(await SendAsync(Command("restart", "300", roles: """["900"]""", options: """[{"name":"map","value":"Expanse"}]""")));
@@ -249,8 +275,8 @@ public sealed class InteractionHandlerTests
         return _handler.HandleAsync(body, signature, timestamp);
     }
 
-    private static string Command(string name, string userId, string roles = "[]", string options = "[]") =>
-        $$$"""{"type":2,"id":"1","application_id":"app","token":"token","member":{"nick":"{{{(userId == "100" ? "Alice" : "Someone")}}}","roles":{{{roles}}},"user":{"id":"{{{userId}}}","username":"user{{{userId}}}"}},"data":{"name":"{{{name}}}","options":{{{options}}}}}""";
+    private static string Command(string name, string userId, string roles = "[]", string options = "[]", string guildId = "500") =>
+        $$$"""{"type":2,"id":"1","application_id":"app","token":"token","guild_id":"{{{guildId}}}","member":{"nick":"{{{(userId == "100" ? "Alice" : "Someone")}}}","roles":{{{roles}}},"user":{"id":"{{{userId}}}","username":"user{{{userId}}}"}},"data":{"name":"{{{name}}}","options":{{{options}}}}}""";
 
     private static string Component(string customId, string userId, string values = "[]") =>
         $$$"""{"type":3,"id":"2","application_id":"app","token":"token","member":{"roles":[],"user":{"id":"{{{userId}}}","global_name":"User {{{userId}}}"}},"data":{"custom_id":"{{{customId}}}","component_type":2,"values":{{{values}}}}}""";

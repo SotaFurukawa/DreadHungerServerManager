@@ -36,6 +36,10 @@ public sealed class Worker(BotWorkflows workflows, IDiscordMessenger messenger, 
         }
 
         await reply.WriteAsync(result.Message);
+        if (item.Kind != WorkKind.Status && configuration.AuditWebhookUrl is { } auditWebhook)
+        {
+            await WriteAuditLogAsync(auditWebhook, item, result);
+        }
     }
 
     /// <summary>見張り役（5分ごと）。通知があれば Webhook に投稿する。</summary>
@@ -53,6 +57,25 @@ public sealed class Worker(BotWorkflows workflows, IDiscordMessenger messenger, 
     }
 
     private static string FirstLine(string text) => text.Split('\n')[0];
+
+    /// <summary>
+    /// 操作の記録を Discord のログ用チャンネルに書く。利用者はメンション形式（通知は飛ばない）で書き、名前を変えても誰か分かるようにする。
+    /// 書けなくても操作の結果には影響させない（CloudWatch Logs には必ず残る）。
+    /// </summary>
+    private async Task WriteAuditLogAsync(string webhookUrl, WorkItem item, BotResult result)
+    {
+        var command = "/" + item.Kind.ToString().ToLowerInvariant();
+        var outcome = result.Succeeded ? "✅ 成功" : "⚠️ 失敗: " + FirstLine(result.Message).TrimStart('⚠', '️', ' ');
+        var settings = item.Settings is { } used && item.Kind != WorkKind.Stop ? $"\n{LaunchPanel.Summary(used)}" : "";
+        try
+        {
+            await messenger.NotifyAsync(webhookUrl, Redact($"📝 <@{item.UserId}>（{item.UserName}）が {command} を実行 → {outcome}{settings}"), CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Console.Error.WriteLine($"audit log post failed: {ex.Message}");
+        }
+    }
 
     private string Redact(string text) => BotRedaction.Redact(text, configuration.Options.Instance);
 

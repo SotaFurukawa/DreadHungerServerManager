@@ -18,6 +18,9 @@ public sealed record BotConfiguration
     /// <summary>自動停止の予告などを送る Discord チャンネルの Webhook URL（任意）。</summary>
     public string? NotifyWebhookUrl { get; init; }
 
+    /// <summary>誰が・何を・結果を書き込む Discord チャンネル（操作の記録用）の Webhook URL（任意）。</summary>
+    public string? AuditWebhookUrl { get; init; }
+
     /// <summary>環境変数から読む。誤りがあれば <paramref name="errors"/> に説明を入れて null。</summary>
     public static BotConfiguration? FromEnvironment(Func<string, string?> getVariable, out IReadOnlyList<string> errors)
     {
@@ -58,9 +61,10 @@ public sealed record BotConfiguration
 
         var users = Ids(getVariable("DHSM_ALLOWED_USER_IDS"));
         var roles = Ids(getVariable("DHSM_ALLOWED_ROLE_IDS"));
-        if (users.Count == 0 && roles.Count == 0)
+        var guilds = Ids(getVariable("DHSM_ALLOWED_GUILD_IDS"));
+        if (users.Count == 0 && roles.Count == 0 && guilds.Count == 0)
         {
-            problems.Add("DHSM_ALLOWED_USER_IDS か DHSM_ALLOWED_ROLE_IDS のどちらかに、/start などを許可する Discord のIDを設定してください。");
+            problems.Add("DHSM_ALLOWED_GUILD_IDS（Discord サーバーのメンバー全員）・DHSM_ALLOWED_USER_IDS・DHSM_ALLOWED_ROLE_IDS のどれかに、/start などを許可する Discord のIDを設定してください。");
         }
 
         errors = problems;
@@ -74,6 +78,7 @@ public sealed record BotConfiguration
             ApplicationId = applicationId,
             PublicKey = publicKey,
             NotifyWebhookUrl = string.IsNullOrWhiteSpace(getVariable("DHSM_NOTIFY_WEBHOOK_URL")) ? null : getVariable("DHSM_NOTIFY_WEBHOOK_URL")!.Trim(),
+            AuditWebhookUrl = string.IsNullOrWhiteSpace(getVariable("DHSM_AUDIT_WEBHOOK_URL")) ? null : getVariable("DHSM_AUDIT_WEBHOOK_URL")!.Trim(),
             Options = new BotOptions
             {
                 Instance = new CloudInstanceRef(region, instanceId),
@@ -81,6 +86,7 @@ public sealed record BotConfiguration
                 GamePort = int.TryParse(getVariable("DHSM_GAME_PORT"), out var port) && port is > 0 and < 65536 ? port : 7777,
                 AllowedUserIds = users,
                 AllowedRoleIds = roles,
+                AllowedGuildIds = guilds,
                 StatusPublic = !string.Equals(getVariable("DHSM_STATUS_PUBLIC")?.Trim(), "false", StringComparison.OrdinalIgnoreCase),
                 WatchdogStaleStopMinutes = int.TryParse(getVariable("DHSM_WATCHDOG_STALE_STOP_MINUTES"), out var minutes) && minutes >= 0 ? minutes : 30,
             },
