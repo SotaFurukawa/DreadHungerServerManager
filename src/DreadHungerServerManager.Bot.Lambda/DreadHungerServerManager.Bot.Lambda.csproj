@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Discord の HTTP Interactions を受ける AWS Lambda（Linux / arm64、カスタムランタイム provided.al2023）。
+       Discord とのやり取り（署名の検証・応答・Webhook）と Lambda の入口だけを持ち、手順は Bot プロジェクトに任せる。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>bootstrap</AssemblyName>
+    <RootNamespace>DreadHungerServerManager.Bot.Lambda</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DreadHungerServerManager.Aws\DreadHungerServerManager.Aws.csproj" />
+    <ProjectReference Include="..\DreadHungerServerManager.Bot\DreadHungerServerManager.Bot.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DreadHungerServerManager.Bot.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Amazon.Lambda.RuntimeSupport" Version="2.3.0" />
+    <PackageReference Include="AWSSDK.Lambda" Version="4.0.109.1" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
+  </ItemGroup>
+
+</Project>

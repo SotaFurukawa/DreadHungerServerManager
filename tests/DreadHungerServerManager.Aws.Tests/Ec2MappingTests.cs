@@ -9,7 +9,7 @@ namespace DreadHungerServerManager.Aws.Tests;
 
 public sealed class Ec2MappingTests
 {
-    private static readonly CloudInstanceRef Instance = new("ap-northeast-3", "i-068a1ed2c17da14d3");
+    private static readonly CloudInstanceRef Instance = new("ap-northeast-3", "i-0123456789abcdef0");
 
     [Theory]
     [InlineData("pending", CloudInstanceState.Starting)]
@@ -88,7 +88,7 @@ public sealed class Ec2MappingTests
     {
         var translated = Ec2Mapping.Translate(new AmazonEC2Exception("not found") { ErrorCode = "InvalidInstanceID.NotFound" }, Instance, "状態の取得");
 
-        Assert.Contains("i-068a1ed2c17da14d3", translated.Message);
+        Assert.Contains("i-0123456789abcdef0", translated.Message);
         Assert.Contains("ap-northeast-3", translated.Message);
     }
 

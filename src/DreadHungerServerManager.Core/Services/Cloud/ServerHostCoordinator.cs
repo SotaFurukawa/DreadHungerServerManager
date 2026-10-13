@@ -425,6 +425,7 @@ public sealed class ServerHostCoordinator(
             AutoStop = _autoStop is null ? null : _autoStopConfig,
             AutoStopAt = _autoStopPlan?.StopAt,
             AutoStopReason = _autoStopPlan?.ReasonText,
+            AutoStopKind = _autoStopPlan?.Reason,
             IsAutoStopping = _isAutoStopping,
         };
         if (await TryStoreAsync(async () =>

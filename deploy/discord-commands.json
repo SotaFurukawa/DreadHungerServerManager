@@ -1,0 +1,64 @@
+[
+  {
+    "name": "start",
+    "description": "サーバーを起動します（引数なしなら設定パネルを表示）",
+    "type": 1,
+    "options": [
+      {
+        "name": "map",
+        "description": "マップ",
+        "type": 3,
+        "required": false,
+        "choices": [
+          { "name": "進入路付近（Approach）", "value": "Approach" },
+          { "name": "広漠の地（Expanse）", "value": "Expanse" },
+          { "name": "山頂（Departure）", "value": "Departure" }
+        ]
+      },
+      { "name": "players", "description": "最大人数（1〜8）", "type": 4, "required": false, "min_value": 1, "max_value": 8 },
+      { "name": "thralls", "description": "人狼人数（0〜7）", "type": 4, "required": false, "min_value": 0, "max_value": 7 },
+      { "name": "days", "description": "吹雪までの日数（1〜30）", "type": 4, "required": false, "min_value": 1, "max_value": 30 },
+      { "name": "dayminutes", "description": "1日の長さ・分（1〜60）", "type": 4, "required": false, "min_value": 1, "max_value": 60 },
+      { "name": "predator", "description": "動物ダメージ倍率（0〜10）", "type": 10, "required": false, "min_value": 0, "max_value": 10 },
+      { "name": "cold", "description": "寒さ倍率（0〜10）", "type": 10, "required": false, "min_value": 0, "max_value": 10 },
+      { "name": "hunger", "description": "空腹速度倍率（0〜10）", "type": 10, "required": false, "min_value": 0, "max_value": 10 },
+      { "name": "coal", "description": "石炭消費倍率（0〜10）", "type": 10, "required": false, "min_value": 0, "max_value": 10 }
+    ]
+  },
+  {
+    "name": "restart",
+    "description": "ゲームサーバーを再起動します（設定を変える場合に使用。省略した項目は今の設定のまま）",
+    "type": 1,
+    "options": [
+      {
+        "name": "map",
+        "description": "マップ",
+        "type": 3,
+        "required": false,
+        "choices": [
+          { "name": "進入路付近（Approach）", "value": "Approach" },
+          { "name": "広漠の地（Expanse）", "value": "Expanse" },
+          { "name": "山頂（Departure）", "value": "Departure" }
+        ]
+      },
+      { "name": "players", "description": "最大人数（1〜8）", "type": 4, "required": false, "min_value": 1, "max_value": 8 },
+      { "name": "thralls", "description": "人狼人数（0〜7）", "type": 4, "required": false, "min_value": 0, "max_value": 7 },
+      { "name": "days", "description": "吹雪までの日数（1〜30）", "type": 4, "required": false, "min_value": 1, "max_value": 30 },
+      { "name": "dayminutes", "description": "1日の長さ・分（1〜60）", "type": 4, "required": false, "min_value": 1, "max_value": 60 },
+      { "name": "predator", "description": "動物ダメージ倍率（0〜10）", "type": 10, "required": false, "min_value": 0, "max_value": 10 },
+      { "name": "cold", "description": "寒さ倍率（0〜10）", "type": 10, "required": false, "min_value": 0, "max_value": 10 },
+      { "name": "hunger", "description": "空腹速度倍率（0〜10）", "type": 10, "required": false, "min_value": 0, "max_value": 10 },
+      { "name": "coal", "description": "石炭消費倍率（0〜10）", "type": 10, "required": false, "min_value": 0, "max_value": 10 }
+    ]
+  },
+  {
+    "name": "stop",
+    "description": "ゲームサーバーとサーバーマシンを停止します（確認あり）",
+    "type": 1
+  },
+  {
+    "name": "status",
+    "description": "サーバーの状態と接続先アドレスを表示します",
+    "type": 1
+  }
+]

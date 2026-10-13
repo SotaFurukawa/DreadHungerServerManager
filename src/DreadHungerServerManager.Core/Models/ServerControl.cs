@@ -100,6 +100,9 @@ public sealed record ServerHeartbeat
     /// <summary>次の自動停止の理由（利用者向けの説明）。</summary>
     public string? AutoStopReason { get; init; }
 
+    /// <summary>次の自動停止の理由の種類（警告のタイミングの判断に使う）。</summary>
+    public AutoStopReason? AutoStopKind { get; init; }
+
     /// <summary>自動停止を実行中（ゲームサーバーと EC2 を止めている）。</summary>
     public bool IsAutoStopping { get; init; }
 

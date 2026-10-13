@@ -12,6 +12,7 @@ namespace DreadHungerServerManager.Aws;
 /// <item><c>/dhsm/{サーバーID}/request</c>: GUI・Discord Bot が書き、EC2 上の常駐サービスが読む</item>
 /// <item><c>/dhsm/{サーバーID}/status</c>: 常駐サービスが書き、GUI・Discord Bot が読む</item>
 /// <item><c>/dhsm/{サーバーID}/config</c>: 自動停止の設定。GUI が書き、常駐サービスが読む</item>
+/// <item><c>/dhsm/{サーバーID}/operation</c> など: 操作中の印・通知済みの記録（Discord Bot が使う）</item>
 /// </list>
 /// 秘密情報は置かない（ゲーム設定と状態だけ）。
 /// </summary>
@@ -42,6 +43,12 @@ public sealed class SsmServerControlStore(AwsClientFactory clients, string regio
 
     public Task PutAutoStopConfigAsync(string serverId, AutoStopConfig config, CancellationToken cancellationToken = default) =>
         PutAsync(ConfigParameterName(serverId), ServerControlJson.Serialize(config), cancellationToken);
+
+    public Task<string?> GetValueAsync(string serverId, string name, CancellationToken cancellationToken = default) =>
+        GetAsync($"{ParameterPrefix}/{serverId}/{name}", cancellationToken);
+
+    public Task PutValueAsync(string serverId, string name, string value, CancellationToken cancellationToken = default) =>
+        PutAsync($"{ParameterPrefix}/{serverId}/{name}", value, cancellationToken);
 
     private async Task<string?> GetAsync(string name, CancellationToken cancellationToken)
     {

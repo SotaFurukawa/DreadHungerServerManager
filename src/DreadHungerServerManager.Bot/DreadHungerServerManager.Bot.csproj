@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Discord Bot の中身（権限・設定パネルの状態・/start などの手順・メッセージ）。
+       Discord の API や AWS SDK には依存しない（Discord とのやり取りは Bot.Lambda、AWS は Aws プロジェクト）。 -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DreadHungerServerManager.Core\DreadHungerServerManager.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DreadHungerServerManager.Bot.Tests" />
+  </ItemGroup>
+
+</Project>

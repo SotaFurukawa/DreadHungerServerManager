@@ -24,6 +24,13 @@ public interface IServerControlStore
     Task<AutoStopConfig?> GetAutoStopConfigAsync(string serverId, CancellationToken cancellationToken = default);
 
     Task PutAutoStopConfigAsync(string serverId, AutoStopConfig config, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 補助的な値（操作中の印・通知済みの記録など）。<paramref name="name"/> は英小文字・数字・ハイフン。なければnull。
+    /// </summary>
+    Task<string?> GetValueAsync(string serverId, string name, CancellationToken cancellationToken = default);
+
+    Task PutValueAsync(string serverId, string name, string value, CancellationToken cancellationToken = default);
 }
 
 /// <summary>メモリ上の <see cref="IServerControlStore"/>（テスト・画面確認用）。</summary>
@@ -32,6 +39,7 @@ public sealed class InMemoryServerControlStore : IServerControlStore
     private readonly ConcurrentDictionary<string, ServerControlRequest> _requests = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, ServerHeartbeat> _heartbeats = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, AutoStopConfig> _autoStopConfigs = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<(string ServerId, string Name), string> _values = new();
 
     public Task<ServerControlRequest?> GetRequestAsync(string serverId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_requests.TryGetValue(serverId, out var request) ? request : null);
@@ -57,6 +65,15 @@ public sealed class InMemoryServerControlStore : IServerControlStore
     public Task PutAutoStopConfigAsync(string serverId, AutoStopConfig config, CancellationToken cancellationToken = default)
     {
         _autoStopConfigs[serverId] = config;
+        return Task.CompletedTask;
+    }
+
+    public Task<string?> GetValueAsync(string serverId, string name, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_values.TryGetValue((serverId, name), out var value) ? value : null);
+
+    public Task PutValueAsync(string serverId, string name, string value, CancellationToken cancellationToken = default)
+    {
+        _values[(serverId, name)] = value;
         return Task.CompletedTask;
     }
 }

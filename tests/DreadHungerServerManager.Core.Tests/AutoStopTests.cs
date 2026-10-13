@@ -2,6 +2,7 @@ using DreadHungerServerManager.Core.Configuration;
 using DreadHungerServerManager.Core.Models;
 using DreadHungerServerManager.Core.Services;
 using DreadHungerServerManager.Core.Services.Cloud;
+using DreadHungerServerManager.Core.Services.Simulation;
 using Microsoft.Extensions.Time.Testing;
 
 namespace DreadHungerServerManager.Core.Tests;
