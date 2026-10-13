@@ -340,6 +340,27 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
         MaxLogLines = (int)Options.MaxLogLines,
     };
 
+    /// <summary>
+    /// この PC（EC2）を停止する前に、確認なしでサーバーを止める（時間内に終わらなければ強制終了）。
+    /// 止まっている、または止められたらtrue。
+    /// </summary>
+    public async Task<bool> StopServerForShutdownAsync()
+    {
+        if (State == ServerState.Stopped)
+        {
+            return true;
+        }
+
+        try
+        {
+            return await _controller.StopAsync(Options.GracefulStopTimeout, _ => Task.FromResult(true)) == StopResult.Stopped;
+        }
+        catch (OperationInProgressException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>ウィンドウを閉じる前に呼ぶ。閉じてよければtrue。</summary>
     public async Task<bool> PrepareForExitAsync()
     {

@@ -22,7 +22,7 @@ jobs:
           global-json-file: global.json
 
       - name: Test
-        run: dotnet test tests/DreadHungerServerManager.Core.Tests -c Release --blame-hang-timeout 5m
+        run: dotnet test DreadHungerServerManager.sln -c Release --blame-hang-timeout 5m
 
       - name: Install Inno Setup
         run: |

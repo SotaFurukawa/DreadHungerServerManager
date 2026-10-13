@@ -19,6 +19,14 @@ public static class ViewHelpers
         _ => Brush("SystemFillColorNeutralBrush"),
     };
 
+    public static Brush CloudStateBrush(CloudInstanceState state) => state switch
+    {
+        CloudInstanceState.Running => Brush("SystemFillColorSuccessBrush"),
+        CloudInstanceState.Starting or CloudInstanceState.Stopping => Brush("SystemFillColorCautionBrush"),
+        CloudInstanceState.Error => Brush("SystemFillColorCriticalBrush"),
+        _ => Brush("SystemFillColorNeutralBrush"),
+    };
+
     public static Brush LogBrush(LogLineKind kind) => kind switch
     {
         LogLineKind.Error => Brush("SystemFillColorCriticalBrush"),

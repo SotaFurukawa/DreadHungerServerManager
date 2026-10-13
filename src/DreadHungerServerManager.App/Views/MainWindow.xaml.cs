@@ -130,6 +130,7 @@ public sealed partial class MainWindow : Window
     {
         var page = (args.SelectedItem as NavigationViewItem)?.Tag switch
         {
+            "cloud" => typeof(CloudPage),
             "settings" => typeof(SettingsPage),
             "about" => typeof(AboutPage),
             _ => typeof(ServerPage),

@@ -2,8 +2,10 @@ using System.Runtime.InteropServices;
 using DreadHungerServerManager.App.Services;
 using DreadHungerServerManager.App.ViewModels;
 using DreadHungerServerManager.App.Views;
+using DreadHungerServerManager.Aws;
 using DreadHungerServerManager.Core.Configuration;
 using DreadHungerServerManager.Core.Services;
+using DreadHungerServerManager.Core.Services.Cloud;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 
@@ -20,6 +22,7 @@ public partial class App : Application
     private MainWindow? _window;
     private IAppSettingsStore? _settingsStore;
     private IServerProcessManager? _manager;
+    private AwsClientFactory? _awsClients;
     private DispatcherQueueTimer? _saveTimer;
 
     public App()
@@ -38,6 +41,8 @@ public partial class App : Application
     }
 
     public static ServerViewModel ViewModel { get; private set; } = null!;
+
+    public static CloudViewModel CloudViewModel { get; private set; } = null!;
 
     public static FileAppLog Log { get; private set; } = new(AppPaths.CreateDefault().LogsDirectory);
 
@@ -59,6 +64,7 @@ public partial class App : Application
         _manager = new ServerProcessManager();
         var interaction = new UserInteractionService();
         ViewModel = new ServerViewModel(new GameServerController(_manager), presets, interaction, paths, loaded.Value, SynchronizationContext.Current!);
+        CloudViewModel = CreateCloudViewModel(loaded.Value.Cloud, interaction);
 
         _window = new MainWindow(ViewModel);
         interaction.Attach(_window);
@@ -68,11 +74,51 @@ public partial class App : Application
             interaction.ShowToast($"エラーが発生しました: {ex.Message}", NoticeSeverity.Error);
         };
         ViewModel.SettingsChanged += (_, _) => ScheduleSave();
+        CloudViewModel.SettingsChanged += (_, _) =>
+        {
+            if (_awsClients is not null)
+            {
+                _awsClients.ProfileName = CloudViewModel.Settings.ProfileName;
+            }
+
+            ScheduleSave();
+        };
         _window.Closed += (_, _) => Shutdown();
         _window.Activate();
 
         ViewModel.ReportStartupWarnings([loaded.Warning, presets.LoadWarning]);
         ViewModel.AttachToRunningServer();
+    }
+
+    /// <summary>
+    /// AWS 連携の ViewModel を作る。起動引数 <c>--fake-cloud</c> があれば、実 AWS の代わりに疑似 EC2 を使う（動作確認用）。
+    /// </summary>
+    private CloudViewModel CreateCloudViewModel(CloudSettings settings, IUserInteraction interaction)
+    {
+        var simulated = Environment.GetCommandLineArgs().Any(arg => string.Equals(arg, "--fake-cloud", StringComparison.OrdinalIgnoreCase));
+        ICloudInstanceService cloud;
+        Func<IReadOnlyList<string>> listProfiles;
+        if (simulated)
+        {
+            cloud = new FakeCloudInstanceService { StartDuration = TimeSpan.FromSeconds(15), StopDuration = TimeSpan.FromSeconds(10) };
+            listProfiles = () => [];
+        }
+        else
+        {
+            _awsClients = new AwsClientFactory { ProfileName = settings.ProfileName };
+            cloud = new AwsEc2InstanceService(_awsClients);
+            listProfiles = AwsClientFactory.ListProfileNames;
+        }
+
+        return new CloudViewModel(
+            cloud,
+            settings,
+            interaction,
+            SynchronizationContext.Current!,
+            listProfiles,
+            async () => (await Ec2InstanceMetadata.TryGetIdentityAsync())?.InstanceId,
+            ViewModel.StopServerForShutdownAsync,
+            simulated);
     }
 
     private void ScheduleSave()
@@ -98,7 +144,7 @@ public partial class App : Application
 
         try
         {
-            _settingsStore.Save(ViewModel.CreateSettingsSnapshot());
+            _settingsStore.Save(ViewModel.CreateSettingsSnapshot() with { Cloud = CloudViewModel.Settings });
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -113,6 +159,8 @@ public partial class App : Application
         SaveSettings();
         _manager?.Dispose();
         ViewModel.Dispose();
+        CloudViewModel?.Dispose();
+        _awsClients?.Dispose();
         Log.Info("終了");
         _instanceMutex?.Dispose();
     }

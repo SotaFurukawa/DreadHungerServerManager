@@ -38,7 +38,9 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.DWrite" Version="2.1.0" />
   </ItemGroup>
 
+
   <ItemGroup>
+    <ProjectReference Include="..\DreadHungerServerManager.Aws\DreadHungerServerManager.Aws.csproj" />
     <ProjectReference Include="..\DreadHungerServerManager.Core\DreadHungerServerManager.Core.csproj" />
   </ItemGroup>
 </Project>

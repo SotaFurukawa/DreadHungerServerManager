@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- AWS SDK を使う実装（EC2 の操作など）。AWS 固有の型はこのプロジェクトの外に出さない。
+       GUI・EC2 上の Host・AWS Lambda 上の Discord Bot から共通で使う。 -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DreadHungerServerManager.Core\DreadHungerServerManager.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DreadHungerServerManager.Aws.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.EC2" Version="4.0.126.4" />
+  </ItemGroup>
+
+</Project>

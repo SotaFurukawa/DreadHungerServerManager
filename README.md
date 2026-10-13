@@ -17,6 +17,7 @@ Dread Hunger Dedicated Server（`DreadHungerServer.exe`）を、batファイル�
 - 二重起動の防止。アプリ外で起動済みのサーバーも検出して、監視・停止できる
 - 異常終了の検出（終了コードと稼働時間を表示）。試合の終了後にサーバーが自分で終了した場合は、異常終了ではなく案内として表示
 - 接続中のプレイヤー人数と試合の状態（試合待ち／開始準備中／試合中／試合終了）の表示（サーバーログの参加・切断から集計）
+- AWS EC2 の状態表示と起動・停止（「AWS / Cloud」ページ）。パブリック IP と接続先（`IP:7777`）の表示とコピー。起動・停止の完了まで待って結果を表示
 - プリセット（標準: Standard / Short Game / Long Game、名前を付けて保存・読み込み・削除）
 - 最後の設定（マップ・各値・サーバーの場所など）を自動保存し、次回起動時に復元
 
@@ -59,6 +60,74 @@ Start-Process $setup
 6. 止めるときは「サーバー停止」を押します。まずサーバーへ Ctrl+C を送り、通常の終了処理を行わせます。設定した時間（既定20秒）を過ぎても終了しない場合は、強制終了するかを確認します。
 
 アプリを閉じるときにサーバーが起動中だと、「停止して終了」「サーバーを残して終了」を選べます（設定ページで既定の動作を変えられます）。残して終了した場合も、次にアプリを開くと起動中のサーバーを自動で検出し、管理を再開します。
+
+## AWS の設定（EC2 の起動・停止）
+
+「AWS / Cloud」ページから、Dread Hunger サーバーを置いた EC2 を起動・停止し、最新の接続先（パブリック IP:7777）を確認できます。EC2 は停止・起動のたびにパブリック IP が変わる（Elastic IP を除く）ため、遊ぶ前にここで確認してください。
+
+> **アクセスキーはアプリに入力・保存しません。** AWS SDK の標準の方法（共有認証情報ファイルのプロファイル、環境変数、EC2 の IAM ロール）から読み込みます。settings.json に保存されるのはリージョン・インスタンスID・プロファイル名だけです。
+
+### 1. 専用の IAM ユーザーを作る（ルートユーザーのキーは使わない）
+
+ルートユーザーのアクセスキーは、漏れるとアカウントのすべてを操作されてしまいます（高額なインスタンスを大量に起動されるなど、料金の被害に上限がありません）。このアプリ用に、**対象の EC2 の起動・停止だけを許可した IAM ユーザー**を作ってください。
+
+1. AWS マネジメントコンソールで **IAM → ポリシー → ポリシーの作成** を開き、「JSON」に次を貼り付けます。`<アカウントID>`（12桁）・リージョン・インスタンスIDは自分のものに置き換えます。ポリシー名は例えば `DreadHungerServerControl` にします。
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "DescribeInstances",
+         "Effect": "Allow",
+         "Action": "ec2:DescribeInstances",
+         "Resource": "*"
+       },
+       {
+         "Sid": "ControlDreadHungerServer",
+         "Effect": "Allow",
+         "Action": ["ec2:StartInstances", "ec2:StopInstances", "ec2:RebootInstances"],
+         "Resource": "arn:aws:ec2:ap-northeast-3:<アカウントID>:instance/i-xxxxxxxxxxxxxxxxx"
+       }
+     ]
+   }
+   ```
+
+   `ec2:DescribeInstances`（状態の取得）は AWS の仕様で対象のインスタンスを限定できないため `"*"` にしています。読み取りだけの権限です。起動・停止・再起動は、上のインスタンスだけに限定しています。
+
+2. **IAM → ユーザー → ユーザーの作成** で、名前を例えば `dread-hunger-manager` にします（コンソールへのアクセスは不要）。「ポリシーを直接アタッチする」で 1. のポリシーを選びます。
+3. 作ったユーザーの **セキュリティ認証情報 → アクセスキーを作成** を開き、用途に「AWS の外部で実行されるアプリケーション」を選んで作成します。表示されたアクセスキーIDとシークレットアクセスキーを、次の手順で使います（シークレットはこの画面でしか表示されません）。
+
+### 2. この PC に認証情報を保存する
+
+`%USERPROFILE%\.aws\credentials`（例: `C:\Users\<ユーザー名>\.aws\credentials`）というファイルを作り、次のように書きます。`[dread-hunger]` がプロファイル名です。
+
+```ini
+[dread-hunger]
+aws_access_key_id = AKIA................
+aws_secret_access_key = ........................................
+```
+
+AWS CLI が入っていれば `aws configure --profile dread-hunger` でも作れます。このファイルはユーザーフォルダーにあり、リポジトリやアプリのフォルダーには入りません。キーをチャットやスクリーンショットで共有しないでください。
+
+### 3. アプリで設定する
+
+「AWS / Cloud」ページの「接続設定」に入力します。
+
+| 項目 | 例 |
+| --- | --- |
+| リージョン | `ap-northeast-3`（大阪） |
+| インスタンスID | `i-xxxxxxxxxxxxxxxxx`（EC2 コンソールのインスタンス一覧に表示） |
+| AWS プロファイル | `dread-hunger`（2. で付けた名前。空欄なら環境変数・`default` プロファイル・EC2 の IAM ロールの順に使う） |
+| ゲームのポート | `7777`（接続先の表示に使う） |
+
+入力すると状態を取得し、以降は30秒ごとに更新します。「EC2 起動」を押すと稼働中になるまで待ち、パブリック IP と接続先を表示します。Windows とゲームサーバーが起動するまでには、さらに数分かかります（ゲームサーバーの自動起動は、今後追加する EC2 上の常駐サービスで対応します）。
+
+「EC2 停止」は確認のうえ停止し、停止完了まで待ちます。**このアプリを対象の EC2 上で動かしている場合は**、先にこのアプリで管理しているゲームサーバーを安全に停止してから、EC2（この PC 自体）を停止します。
+
+### セキュリティグループ
+
+EC2 のセキュリティグループで、ゲームのポート（UDP 7777）の受信を許可してください（送信元 `0.0.0.0/0`）。リモートデスクトップ（TCP 3389）は送信元を自分の IP に限定することをおすすめします。このアプリの AWS 連携のために開けるポートはありません。
 
 ## DreadHungerServer.exe の設定方法
 
@@ -156,11 +225,14 @@ DreadHungerServerManager.sln
 │   │                  JsonAppSettingsStore, PresetService
 │   ├─ Services\Cloud  ICloudInstanceService（EC2などの操作の抽象）, FakeCloudInstanceService
 │   └─ Interop         Win32 API（プロセス一覧・コンソール制御・ファイルID）
+├─ src\DreadHungerServerManager.Aws      AWS SDK を使う実装（net10.0）。AWS 固有の型はここから外に出さない
+│                      AwsEc2InstanceService（ICloudInstanceService の実装）, AwsClientFactory, Ec2InstanceMetadata
 ├─ src\DreadHungerServerManager.App      WinUI 3 のアプリ
-│   ├─ ViewModels      ServerViewModel ほか（MVVM。WinUIの型に依存しない）
-│   ├─ Views           MainWindow, ServerPage, SettingsPage, AboutPage
+│   ├─ ViewModels      ServerViewModel, CloudViewModel ほか（MVVM。WinUIの型に依存しない）
+│   ├─ Views           MainWindow, ServerPage, CloudPage, SettingsPage, AboutPage
 │   └─ Services        ダイアログ・通知・ファイル選択（IUserInteraction の実装）、単一インスタンス
 ├─ tests\DreadHungerServerManager.Core.Tests   xUnit（単体テスト＋疑似サーバーを使った結合テスト）
+├─ tests\DreadHungerServerManager.Aws.Tests    xUnit（EC2 の応答・エラーの変換。実 AWS には接続しない）
 └─ tools\FakeDreadHungerServer           開発用の疑似 DreadHungerServer.exe
 ```
 
@@ -194,7 +266,7 @@ DreadHungerServerManager.sln
 ### 今後の拡張に向けて
 
 - サーバー1台分の制御は `IServerProcessManager` と `ServerViewModel` の組にまとまっているため、複数サーバー管理はこの組をサーバーごとに持たせ、NavigationView に項目を増やす形で追加できます
-- EC2の起動/停止・パブリックIP取得は `ICloudInstanceService` として Core に抽象を用意しました（AWS SDK を使う実装は別プロジェクトで追加します）。`FakeCloudInstanceService` は実AWSを使わずに「停止中→起動処理中→稼働中」「稼働中→停止処理中→停止中」の遷移と、起動のたびにIPが変わる動きを再現します。AWS 連携の設定は `settings.json` の `cloud` 節に保存します（秘密情報は保存しません）
+- EC2の起動/停止・パブリックIP取得は `ICloudInstanceService` として Core に抽象を用意しました（AWS SDK を使う実装は `DreadHungerServerManager.Aws` の `AwsEc2InstanceService`）。`FakeCloudInstanceService` は実AWSを使わずに「停止中→起動処理中→稼働中」「稼働中→停止処理中→停止中」の遷移と、起動のたびにIPが変わる動きを再現します。AWS 連携の設定は `settings.json` の `cloud` 節に保存します（秘密情報は保存しません）
 - 自動起動は、`AppSettings` に項目を追加し、`App.OnLaunched` の起動済みサーバー検出の後で `StartCommand` を実行する形で追加できます
 - Mod対応は、起動引数やファイル配置の処理を `ServerCommandBuilder` と新しいサービスに追加する想定です
 
@@ -212,8 +284,14 @@ DreadHungerServerManager.sln
 | `-fakeplayer=名前` | 起動完了の直後に、そのプレイヤーが参加したログを出す |
 | `-fakematchend=秒` | 起動完了から指定秒後に試合が終わり、実物と同じく自分で終了する（終了コード0） |
 
+AWS を使わずに「AWS / Cloud」ページを確認するには、起動引数 `--fake-cloud` を付けて起動します。実際の AWS の代わりに疑似 EC2（`FakeCloudInstanceService`。起動15秒・停止10秒、起動のたびに IP が変わる）を操作します。
+
 ## トラブルシューティング
 
 - **「起動完了のログを検出できていません」と出る**: 設定ページの「使用するファイル」が実際のログファイルを指しているか確認してください。
 - **停止できない／強制終了できない**: サーバーが管理者として起動されている場合、このアプリも管理者として実行する必要があります。
+- **「AWS の認証情報が見つかりません」**: `%USERPROFILE%\.aws\credentials` のプロファイル名と、「接続設定」のプロファイル名が一致しているか確認してください。
+- **「AWS の認証に失敗しました」**: アクセスキーが無効（削除・無効化済み）か、PC の時刻が大きくずれています。
+- **「権限がありません」**: IAM ポリシーのリージョン・アカウントID・インスタンスIDが正しいか確認してください。EBS ボリュームをカスタマー管理の KMS キーで暗号化している場合は、起動に `kms:CreateGrant` も必要です。
+- **「インスタンスが見つかりません」**: リージョンとインスタンスIDの組み合わせを確認してください（大阪は `ap-northeast-3`、東京は `ap-northeast-1`）。
 - **外部から接続できない**: Windows ファイアウォールと（EC2の場合は）セキュリティグループで、ゲームポート（既定 UDP 7777。`-port` で変えた場合はその番号）の受信を許可してください。
