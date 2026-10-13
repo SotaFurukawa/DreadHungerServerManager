@@ -39,7 +39,14 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish に失敗しました（終了コード $LASTEXITCODE）。"
 }
 
-Get-ChildItem $output -Filter *.pdb | Remove-Item
+# EC2 用の常駐サービス。host フォルダーに置き、インストーラーで選んだ場合だけ Windows サービスとして登録する。
+$hostProject = Join-Path $root 'src\DreadHungerServerManager.Host\DreadHungerServerManager.Host.csproj'
+dotnet publish $hostProject -c Release -r $rid --self-contained true -o (Join-Path $output 'host')
+if ($LASTEXITCODE -ne 0) {
+    throw "常駐サービスの dotnet publish に失敗しました（終了コード $LASTEXITCODE）。"
+}
+
+Get-ChildItem $output -Filter *.pdb -Recurse | Remove-Item
 if (Test-Path $zip) {
     Remove-Item $zip
 }

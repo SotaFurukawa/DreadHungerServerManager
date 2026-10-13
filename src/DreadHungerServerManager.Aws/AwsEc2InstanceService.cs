@@ -151,7 +151,7 @@ internal static class Ec2Mapping
         return new(CloudErrorKind.Unknown, $"EC2 の{operation}に失敗しました: {exception.Message}", exception);
     }
 
-    private static bool IsNetworkFailure(Exception exception)
+    internal static bool IsNetworkFailure(Exception exception)
     {
         for (var current = exception; current is not null; current = current.InnerException)
         {

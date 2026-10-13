@@ -44,8 +44,15 @@ jobs:
           if ($env:GITHUB_REF_NAME -ne "v$version") {
             throw "タグ $env:GITHUB_REF_NAME と Directory.Build.props のバージョン v$version が一致しません。"
           }
-          gh release create $env:GITHUB_REF_NAME `
-            dist/DreadHungerServerManager-Setup.exe `
-            "dist/DreadHungerServerManager-$version-win-x64.zip" `
-            --title "Dread Hunger Server Manager $version" `
-            --generate-notes
+          $releaseArgs = @(
+            $env:GITHUB_REF_NAME,
+            'dist/DreadHungerServerManager-Setup.exe',
+            "dist/DreadHungerServerManager-$version-win-x64.zip",
+            '--title', "Dread Hunger Server Manager $version",
+            '--generate-notes'
+          )
+          # preview / rc はプレリリースにする（README の「最新版」URL の対象にしない）。
+          if ($version -match 'preview|rc') {
+            $releaseArgs += '--prerelease'
+          }
+          gh release create @releaseArgs

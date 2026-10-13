@@ -156,21 +156,74 @@
                 </StackPanel>
             </Border>
 
-            <!-- ゲームサーバー（EC2 の状態とは別） -->
+            <!-- EC2 上のゲームサーバー（EC2 の状態とは別） -->
             <Border Style="{StaticResource CardBorderStyle}">
-                <StackPanel Spacing="8">
-                    <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="Dread Hunger サーバー" />
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Ellipse
-                            Width="12"
-                            Height="12"
+                <StackPanel Spacing="10">
+                    <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="EC2 上のゲームサーバー" />
+                    <Grid ColumnSpacing="20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Ellipse
+                                Width="14"
+                                Height="14"
+                                VerticalAlignment="Center"
+                                Fill="{x:Bind local:ViewHelpers.StateBrush(Cloud.RemoteState), Mode=OneWay}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="RemoteStateTextBlock"
+                                FontSize="20"
+                                FontWeight="SemiBold"
+                                Text="{x:Bind Cloud.RemoteStateText, Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="1"
                             VerticalAlignment="Center"
-                            Fill="{x:Bind local:ViewHelpers.StateBrush(Server.State), Mode=OneWay}" />
-                        <TextBlock VerticalAlignment="Center">
-                            <Run Text="このアプリで管理: " /><Run FontWeight="SemiBold" Text="{x:Bind Server.StateText, Mode=OneWay}" /><Run Text="　プレイヤー " /><Run Text="{x:Bind Server.PlayerCountText, Mode=OneWay}" />
-                        </TextBlock>
-                    </StackPanel>
-                    <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="EC2 の状態とゲームサーバーの状態は別です。EC2 が稼働中でも、ゲームサーバーが起動していなければ接続できません。今後追加する EC2 上の常駐サービスを導入すると、別の PC からでも EC2 上のゲームサーバーの状態を確認できるようになります。" />
+                            Orientation="Horizontal"
+                            Spacing="8">
+                            <Button AutomationProperties.AutomationId="RemoteStartButton" Command="{x:Bind Cloud.RemoteStartCommand}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="14" Glyph="&#xE768;" />
+                                    <TextBlock Text="ゲームサーバー起動" />
+                                </StackPanel>
+                            </Button>
+                            <Button AutomationProperties.AutomationId="RemoteRestartButton" Command="{x:Bind Cloud.RemoteRestartCommand}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                                    <TextBlock Text="再起動" />
+                                </StackPanel>
+                            </Button>
+                            <Button AutomationProperties.AutomationId="RemoteStopButton" Command="{x:Bind Cloud.RemoteStopCommand}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon FontSize="14" Glyph="&#xE71A;" />
+                                    <TextBlock Text="停止" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock
+                        AutomationProperties.AutomationId="RemoteDetailTextBlock"
+                        Text="{x:Bind Cloud.RemoteDetailText, Mode=OneWay}"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        Style="{StaticResource SecondaryTextStyle}"
+                        Text="{x:Bind Cloud.RemoteLastResultText, Mode=OneWay}"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                        Text="{x:Bind Cloud.RemoteError, Mode=OneWay}"
+                        TextWrapping="Wrap"
+                        Visibility="{x:Bind Cloud.HasRemoteError, Mode=OneWay}" />
+                    <TextBlock
+                        Style="{StaticResource SecondaryTextStyle}"
+                        Text="{x:Bind Cloud.RemoteLaunchSettingsText, Mode=OneWay}"
+                        TextWrapping="Wrap" />
+                    <TextBlock Style="{StaticResource SecondaryTextStyle}" TextWrapping="Wrap">
+                        <Run Text="EC2 の状態とゲームサーバーの状態は別です。EC2 が稼働中でも、ゲームサーバーが起動していなければ接続できません。操作は EC2 上の常駐サービスが数秒ごとに受け取って実行します（README の「EC2 の常駐サービス」）。" /><LineBreak /><Run Text="このアプリで管理しているサーバー: " /><Run FontWeight="SemiBold" Text="{x:Bind Server.StateText, Mode=OneWay}" />
+                    </TextBlock>
                 </StackPanel>
             </Border>
 

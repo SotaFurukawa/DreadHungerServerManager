@@ -99,13 +99,23 @@
 
         <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="サーバー" />
 
-        <InfoBar
-            Grid.Row="1"
-            IsClosable="True"
-            IsOpen="{x:Bind ViewModel.IsNoticeOpen, Mode=TwoWay}"
-            Message="{x:Bind ViewModel.NoticeMessage, Mode=OneWay}"
-            Severity="{x:Bind local:ViewHelpers.ToSeverity(ViewModel.NoticeSeverity), Mode=OneWay}"
-            Title="{x:Bind ViewModel.NoticeTitle, Mode=OneWay}" />
+        <StackPanel Grid.Row="1">
+            <InfoBar
+                Margin="0,0,0,8"
+                AutomationProperties.AutomationId="HostManagedInfoBar"
+                IsClosable="False"
+                IsOpen="{x:Bind ViewModel.IsHostManaged, Mode=OneWay}"
+                Message="この PC では常駐サービスがゲームサーバーを起動・停止しています。起動・停止は「AWS / Cloud」ページの「EC2 上のゲームサーバー」から行ってください。この画面ではログと状態を表示します。"
+                Severity="Informational"
+                Title="常駐サービスが管理しています"
+                Visibility="{x:Bind local:ViewHelpers.VisibleWhen(ViewModel.IsHostManaged), Mode=OneWay}" />
+            <InfoBar
+                IsClosable="True"
+                IsOpen="{x:Bind ViewModel.IsNoticeOpen, Mode=TwoWay}"
+                Message="{x:Bind ViewModel.NoticeMessage, Mode=OneWay}"
+                Severity="{x:Bind local:ViewHelpers.ToSeverity(ViewModel.NoticeSeverity), Mode=OneWay}"
+                Title="{x:Bind ViewModel.NoticeTitle, Mode=OneWay}" />
+        </StackPanel>
 
         <!-- 状態カード -->
         <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}">

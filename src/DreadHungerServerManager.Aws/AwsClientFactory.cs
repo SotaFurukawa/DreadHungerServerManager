@@ -3,6 +3,7 @@ using Amazon;
 using Amazon.EC2;
 using Amazon.Runtime;
 using Amazon.Runtime.CredentialManagement;
+using Amazon.SimpleSystemsManagement;
 using DreadHungerServerManager.Core.Services.Cloud;
 
 namespace DreadHungerServerManager.Aws;
@@ -19,6 +20,7 @@ public sealed class AwsClientFactory : IDisposable
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
     private readonly ConcurrentDictionary<(string Region, string Profile), IAmazonEC2> _ec2Clients = new();
+    private readonly ConcurrentDictionary<(string Region, string Profile), IAmazonSimpleSystemsManagement> _ssmClients = new();
     private string? _profileName;
 
     /// <summary>共有認証情報ファイルのプロファイル名。空なら既定の方法で認証する。</summary>
@@ -61,6 +63,22 @@ public sealed class AwsClientFactory : IDisposable
         });
     }
 
+    public IAmazonSimpleSystemsManagement GetSsmClient(string region)
+    {
+        var profile = ProfileName ?? "";
+        return _ssmClients.GetOrAdd((region, profile), key =>
+        {
+            var config = new AmazonSimpleSystemsManagementConfig
+            {
+                RegionEndpoint = RegionEndpoint.GetBySystemName(key.Region),
+                Timeout = RequestTimeout,
+                MaxErrorRetry = 3,
+            };
+            var credentials = ResolveProfileCredentials(key.Profile);
+            return credentials is null ? new AmazonSimpleSystemsManagementClient(config) : new AmazonSimpleSystemsManagementClient(credentials, config);
+        });
+    }
+
     public void Dispose()
     {
         foreach (var client in _ec2Clients.Values)
@@ -68,7 +86,13 @@ public sealed class AwsClientFactory : IDisposable
             client.Dispose();
         }
 
+        foreach (var client in _ssmClients.Values)
+        {
+            client.Dispose();
+        }
+
         _ec2Clients.Clear();
+        _ssmClients.Clear();
     }
 
     private static AWSCredentials? ResolveProfileCredentials(string profile)

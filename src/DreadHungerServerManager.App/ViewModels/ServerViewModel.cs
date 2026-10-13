@@ -11,6 +11,7 @@ namespace DreadHungerServerManager.App.ViewModels;
 public sealed class ServerViewModel : ObservableObject, IDisposable
 {
     private static readonly TimeSpan StartupWarningDelay = TimeSpan.FromMinutes(3);
+    private const int HostCheckIntervalSeconds = 5;
 
     private readonly GameServerController _controller;
     private readonly IServerProcessManager _manager;
@@ -32,6 +33,9 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
 
     // 画面で編集しない項目（AWS連携など）も保存時に失わないよう、読み込んだ設定を土台にする。
     private readonly AppSettings _baseSettings;
+    private readonly Func<bool> _isHostServiceRunning;
+    private bool _isHostManaged;
+    private int _hostCheckCountdown;
 
     public ServerViewModel(
         GameServerController controller,
@@ -39,11 +43,14 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
         IUserInteraction ui,
         AppPaths paths,
         AppSettings settings,
-        SynchronizationContext uiContext)
+        SynchronizationContext uiContext,
+        Func<bool>? isHostServiceRunning = null)
     {
         _controller = controller;
         _manager = controller.Manager;
         _baseSettings = settings;
+        _isHostServiceRunning = isHostServiceRunning ?? (() => false);
+        _isHostManaged = _isHostServiceRunning();
         _ui = ui;
         _uiContext = uiContext;
         _executablePath = settings.ServerExecutablePath;
@@ -57,9 +64,9 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
         Options.Apply(settings);
         Options.UpdateDefaultLogFilePath(_executablePath);
 
-        StartCommand = new AsyncRelayCommand(StartAsync, () => State == ServerState.Stopped);
-        StopCommand = new AsyncRelayCommand(StopAsync, () => State is ServerState.Starting or ServerState.Running);
-        RestartCommand = new AsyncRelayCommand(RestartAsync, () => State is ServerState.Starting or ServerState.Running);
+        StartCommand = new AsyncRelayCommand(StartAsync, () => !IsHostManaged && State == ServerState.Stopped);
+        StopCommand = new AsyncRelayCommand(StopAsync, () => !IsHostManaged && State is ServerState.Starting or ServerState.Running);
+        RestartCommand = new AsyncRelayCommand(RestartAsync, () => !IsHostManaged && State is ServerState.Starting or ServerState.Running);
         BrowseExecutableCommand = new AsyncRelayCommand(BrowseExecutableAsync);
         CopyCommandLineCommand = new RelayCommand(CopyCommandLine, () => _fullCommandLine is not null);
         ClearLogCommand = new RelayCommand(Log.Clear);
@@ -153,6 +160,24 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
     public ServerState State => _status.State;
 
     public bool IsBusy => State is ServerState.Starting or ServerState.Stopping;
+
+    /// <summary>
+    /// この PC で常駐サービス（Host）が動いていて、ゲームサーバーの起動・停止を任せている。
+    /// この画面から直接操作すると常駐サービスと競合するため、操作は「AWS / Cloud」ページから行い、ここではログを表示する。
+    /// </summary>
+    public bool IsHostManaged
+    {
+        get => _isHostManaged;
+        private set
+        {
+            if (SetProperty(ref _isHostManaged, value))
+            {
+                StartCommand.NotifyCanExecuteChanged();
+                StopCommand.NotifyCanExecuteChanged();
+                RestartCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
 
     public string StateText => State switch
     {
@@ -346,7 +371,8 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
     /// </summary>
     public async Task<bool> StopServerForShutdownAsync()
     {
-        if (State == ServerState.Stopped)
+        // 常駐サービスが管理している場合は、Windows のシャットダウン時に常駐サービスが安全に停止する。
+        if (State == ServerState.Stopped || IsHostManaged)
         {
             return true;
         }
@@ -664,6 +690,18 @@ public sealed class ServerViewModel : ObservableObject, IDisposable
 
     private void OnClockTick()
     {
+        if (--_hostCheckCountdown <= 0)
+        {
+            _hostCheckCountdown = HostCheckIntervalSeconds;
+            IsHostManaged = _isHostServiceRunning();
+
+            // 常駐サービスが起動したサーバーのログをここに表示するため、起動したら管理下（監視のみ）に置く。
+            if (IsHostManaged && State == ServerState.Stopped)
+            {
+                _manager.AttachToRunningServer(Options.LogFilePathOverrideOrNull, Options.LogSource);
+            }
+        }
+
         if (State == ServerState.Stopped)
         {
             return;

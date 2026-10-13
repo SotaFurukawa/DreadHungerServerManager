@@ -112,6 +112,32 @@ public sealed class Ec2MappingTests
         Assert.Contains(".aws", translated.Message);
     }
 
+    [Theory]
+    [InlineData("AccessDeniedException", CloudErrorKind.AccessDenied)]
+    [InlineData("UnrecognizedClientException", CloudErrorKind.CredentialsNotFound)]
+    [InlineData("ThrottlingException", CloudErrorKind.Throttled)]
+    [InlineData("SomethingNew", CloudErrorKind.Unknown)]
+    public void SsmErrors_AreTranslatedWithThePermissionToGrant(string errorCode, CloudErrorKind expected)
+    {
+        var error = new Amazon.SimpleSystemsManagement.AmazonSimpleSystemsManagementException("AWS message") { ErrorCode = errorCode };
+
+        var translated = SsmMapping.Translate(error, SsmServerControlStore.RequestParameterName("default"), "ssm:PutParameter");
+
+        Assert.Equal(expected, translated.Kind);
+        if (expected == CloudErrorKind.AccessDenied)
+        {
+            Assert.Contains("/dhsm/default/request", translated.Message);
+            Assert.Contains("ssm:PutParameter", translated.Message);
+        }
+    }
+
+    [Fact]
+    public void ParameterNames_FollowTheDocumentedLayout()
+    {
+        Assert.Equal("/dhsm/default/request", SsmServerControlStore.RequestParameterName("default"));
+        Assert.Equal("/dhsm/default/status", SsmServerControlStore.StatusParameterName("default"));
+    }
+
     [Fact]
     public async Task UnknownProfile_IsReportedWithoutCallingAws()
     {

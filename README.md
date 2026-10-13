@@ -18,6 +18,7 @@ Dread Hunger Dedicated Server（`DreadHungerServer.exe`）を、batファイル�
 - 異常終了の検出（終了コードと稼働時間を表示）。試合の終了後にサーバーが自分で終了した場合は、異常終了ではなく案内として表示
 - 接続中のプレイヤー人数と試合の状態（試合待ち／開始準備中／試合中／試合終了）の表示（サーバーログの参加・切断から集計）
 - AWS EC2 の状態表示と起動・停止（「AWS / Cloud」ページ）。パブリック IP と接続先（`IP:7777`）の表示とコピー。起動・停止の完了まで待って結果を表示
+- EC2 用の常駐サービス（Windows サービス）。Windows にログインしなくても、EC2 の起動時にゲームサーバーを自動で起動し、GUI からの起動・再起動・停止の要求を処理する。GUI には EC2 上のゲームサーバーの状態（試合の状態・人数・稼働時間）を表示
 - プリセット（標準: Standard / Short Game / Long Game、名前を付けて保存・読み込み・削除）
 - 最後の設定（マップ・各値・サーバーの場所など）を自動保存し、次回起動時に復元
 
@@ -88,12 +89,20 @@ Start-Process $setup
          "Effect": "Allow",
          "Action": ["ec2:StartInstances", "ec2:StopInstances", "ec2:RebootInstances"],
          "Resource": "arn:aws:ec2:ap-northeast-3:<アカウントID>:instance/i-xxxxxxxxxxxxxxxxx"
+       },
+       {
+         "Sid": "ServerControlParameters",
+         "Effect": "Allow",
+         "Action": ["ssm:GetParameter", "ssm:PutParameter"],
+         "Resource": "arn:aws:ssm:ap-northeast-3:<アカウントID>:parameter/dhsm/default/*"
        }
      ]
    }
    ```
 
-   `ec2:DescribeInstances`（状態の取得）は AWS の仕様で対象のインスタンスを限定できないため `"*"` にしています。読み取りだけの権限です。起動・停止・再起動は、上のインスタンスだけに限定しています。
+   `ec2:DescribeInstances`（状態の取得）は AWS の仕様で対象のインスタンスを限定できないため `"*"` にしています。読み取りだけの権限です。起動・停止・再起動は、上のインスタンスだけに限定しています。`ssm:*Parameter` は、EC2 上の常駐サービスとの受け渡し（`/dhsm/default/` の下だけ）に使います。
+
+   > 既に EC2 の権限だけでポリシーを作った場合は、**IAM → ポリシー → 該当のポリシー → 編集** で `ServerControlParameters` の部分を追加してください。
 
 2. **IAM → ユーザー → ユーザーの作成** で、名前を例えば `dread-hunger-manager` にします（コンソールへのアクセスは不要）。「ポリシーを直接アタッチする」で 1. のポリシーを選びます。
 3. 作ったユーザーの **セキュリティ認証情報 → アクセスキーを作成** を開き、用途に「AWS の外部で実行されるアプリケーション」を選んで作成します。表示されたアクセスキーIDとシークレットアクセスキーを、次の手順で使います（シークレットはこの画面でしか表示されません）。
@@ -102,7 +111,9 @@ Start-Process $setup
 
 `%USERPROFILE%\.aws\credentials`（例: `C:\Users\<ユーザー名>\.aws\credentials`）というファイルを作り、次のように書きます。`[dread-hunger]` がプロファイル名です。
 
-```ini
+> **ファイル名は拡張子なしの `credentials` です。** `credentials.txt` や `credentials.ini` だと読み込まれません。メモ帳で保存するときは、ファイル名を `"credentials"` のように `"` で囲むと拡張子が付きません。エクスプローラーで「ファイル名拡張子」を表示にすると確認できます。
+
+```
 [dread-hunger]
 aws_access_key_id = AKIA................
 aws_secret_access_key = ........................................
@@ -121,13 +132,93 @@ AWS CLI が入っていれば `aws configure --profile dread-hunger` でも作�
 | AWS プロファイル | `dread-hunger`（2. で付けた名前。空欄なら環境変数・`default` プロファイル・EC2 の IAM ロールの順に使う） |
 | ゲームのポート | `7777`（接続先の表示に使う） |
 
-入力すると状態を取得し、以降は30秒ごとに更新します。「EC2 起動」を押すと稼働中になるまで待ち、パブリック IP と接続先を表示します。Windows とゲームサーバーが起動するまでには、さらに数分かかります（ゲームサーバーの自動起動は、今後追加する EC2 上の常駐サービスで対応します）。
+入力すると状態を取得し、以降は30秒ごとに更新します。「EC2 起動」を押すと稼働中になるまで待ち、パブリック IP と接続先を表示します。Windows とゲームサーバーが起動するまでには、さらに数分かかります（ゲームサーバーの自動起動は、下の「EC2 の常駐サービス」を入れると行われます）。
 
 「EC2 停止」は確認のうえ停止し、停止完了まで待ちます。**このアプリを対象の EC2 上で動かしている場合は**、先にこのアプリで管理しているゲームサーバーを安全に停止してから、EC2（この PC 自体）を停止します。
 
 ### セキュリティグループ
 
 EC2 のセキュリティグループで、ゲームのポート（UDP 7777）の受信を許可してください（送信元 `0.0.0.0/0`）。リモートデスクトップ（TCP 3389）は送信元を自分の IP に限定することをおすすめします。このアプリの AWS 連携のために開けるポートはありません。
+
+## EC2 の常駐サービス（ログインしなくてもゲームサーバーを自動起動）
+
+EC2 に常駐サービス（Windows サービス `DreadHungerServerManagerHost`）を入れると、次のようになります。
+
+- EC2 が起動すると、Windows にログインしなくても、前回の設定でゲームサーバーを自動で起動します
+- 自宅の PC の「AWS / Cloud」ページから、EC2 上のゲームサーバーの状態（起動中・試合中・人数・稼働時間）を確認し、起動・再起動・停止ができます
+- Windows のシャットダウン時（EC2 の停止時）は、ゲームサーバーを安全に停止してから終わります
+- 試合が終わってゲームサーバーが自分で終了した場合は、停止のままにします（次に遊ぶときは「ゲームサーバー起動」）
+
+常駐サービスと GUI・Discord Bot は、AWS Systems Manager の Parameter Store（標準パラメーター、無料）の `/dhsm/default/request`（要求）と `/dhsm/default/status`（状態）でやり取りします。常駐サービスから数秒ごとに取りに行くため、**EC2 に受信用のポートを開ける必要はありません**。秘密情報は置きません。
+
+### 1. EC2 用の IAM ロールを作る
+
+常駐サービスは、アクセスキーではなく **EC2 に割り当てた IAM ロール**で AWS を使います。
+
+1. **IAM → ロール → ロールを作成** で、「信頼されたエンティティタイプ」に **AWS のサービス**、ユースケースに **EC2** を選びます。許可ポリシーは付けずに進め、名前を例えば `DreadHungerServerHostRole` にして作成します。
+2. 作ったロールの **許可を追加 → インラインポリシーを作成** で「JSON」に次を貼り付けます（`<アカウントID>` は自分のもの）。名前は例えば `DreadHungerServerHost` にします。
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "ServerControlParameters",
+         "Effect": "Allow",
+         "Action": ["ssm:GetParameter", "ssm:PutParameter"],
+         "Resource": "arn:aws:ssm:ap-northeast-3:<アカウントID>:parameter/dhsm/default/*"
+       },
+       {
+         "Sid": "DescribeInstances",
+         "Effect": "Allow",
+         "Action": "ec2:DescribeInstances",
+         "Resource": "*"
+       }
+     ]
+   }
+   ```
+
+   `ec2:DescribeInstances` は、EC2 上で GUI を開いたときに「AWS / Cloud」ページで状態を表示するためのものです（読み取りのみ）。
+
+3. **EC2 → インスタンス** で対象のインスタンスを選び、**アクション → セキュリティ → IAM ロールを変更** で 1. のロールを選んで更新します。
+
+### 2. 常駐サービスを入れる
+
+EC2 にリモートデスクトップで接続し、インストーラーを実行します。
+
+1. 最初の画面で **「すべてのユーザー用にインストール」** を選びます（管理者権限が必要です）。
+2. 「追加タスクの選択」で **「EC2 用の常駐サービスを入れる」** にチェックを付けます。
+3. インストールが終わると、常駐サービスが登録されて開始し、ゲームサーバーを起動します（既に GUI でゲームサーバーを動かしている場合は、それを管理下に置きます）。
+
+更新のときも同じインストーラーを実行します。常駐サービスが入っていれば自動でチェックが付き、いったん止めて（ゲームサーバーも安全に停止して）から入れ直します。
+
+### 3. 常駐サービスの設定
+
+常駐サービスの設定は `C:\ProgramData\DreadHungerServerManager\settings.json`（GUI と同じ形式）です。最初の起動時に既定値で作られます。
+
+| 項目 | 内容 |
+| --- | --- |
+| `serverExecutablePath` | `DreadHungerServer.exe` の場所（既定 `C:\DreadHunger\WindowsServer\DreadHungerServer.exe`） |
+| `game` | 前回の設定。起動に成功するたびに、使った設定で上書きされる（自動起動にはこの設定を使う） |
+| `additionalArguments` | 追加引数 |
+| `cloud.autoStartGameServer` | `true` なら EC2 の起動時にゲームサーバーを自動で起動する |
+| `cloud.serverId` | 受け渡しに使う名前（既定 `default`。複数サーバー用） |
+
+編集した後は、PowerShell（管理者）で `Restart-Service DreadHungerServerManagerHost` を実行して読み込ませます。
+
+### 4. 動作確認
+
+1. EC2 を再起動します（または停止してから起動します）。**Windows にはログインしません。**
+2. 数分後、自宅の PC の「AWS / Cloud」ページで「EC2 上のゲームサーバー」が **「起動中（参加待ち）」** になり、接続先が表示されることを確認します。
+3. ゲームから接続して遊べることを確認します。
+
+うまくいかない場合は、EC2 にリモートデスクトップで接続して次を確認してください。
+
+- 常駐サービスのログ: `C:\ProgramData\DreadHungerServerManager\logs\host-YYYYMMDD.log`
+- サービスの状態: PowerShell で `Get-Service DreadHungerServerManagerHost`
+- ゲームサーバーのログ: `C:\DreadHunger\WindowsServer\DreadHunger\Saved\Logs\DreadHunger.log`
+
+常駐サービスは LocalSystem で動き、ゲームサーバーはログイン画面の裏側（セッション 0）で動くため、画面には表示されません。EC2 上で GUI を開くと「サーバー」ページに「常駐サービスが管理しています」と表示され、ログと状態を確認できます（起動・停止は「AWS / Cloud」ページから行います）。常駐サービスを止めるには `Stop-Service DreadHungerServerManagerHost`、削除するにはアプリをアンインストールします。
 
 ## DreadHungerServer.exe の設定方法
 
@@ -223,10 +314,14 @@ DreadHungerServerManager.sln
 │   ├─ Services        ServerProcessManager, GameServerController, OperationGate, ServerCommandBuilder,
 │   │                  GameSettingsValidator, ServerLogAnalyzer, PlayerTracker, LogFileTailer,
 │   │                  JsonAppSettingsStore, PresetService
-│   ├─ Services\Cloud  ICloudInstanceService（EC2などの操作の抽象）, FakeCloudInstanceService
+│   ├─ Services\Cloud  ICloudInstanceService（EC2などの操作の抽象）, FakeCloudInstanceService,
+│   │                  IServerControlStore（要求・状態の受け渡し）, ServerControlClient, ServerHostCoordinator
 │   └─ Interop         Win32 API（プロセス一覧・コンソール制御・ファイルID）
 ├─ src\DreadHungerServerManager.Aws      AWS SDK を使う実装（net10.0）。AWS 固有の型はここから外に出さない
-│                      AwsEc2InstanceService（ICloudInstanceService の実装）, AwsClientFactory, Ec2InstanceMetadata
+│                      AwsEc2InstanceService（ICloudInstanceService の実装）, SsmServerControlStore,
+│                      AwsClientFactory, Ec2InstanceMetadata
+├─ src\DreadHungerServerManager.Host     EC2 用の常駐サービス（Windows サービス、net10.0-windows）
+│                      GameServerHostService, HostEnvironment, ServiceInstaller（install / uninstall）
 ├─ src\DreadHungerServerManager.App      WinUI 3 のアプリ
 │   ├─ ViewModels      ServerViewModel, CloudViewModel ほか（MVVM。WinUIの型に依存しない）
 │   ├─ Views           MainWindow, ServerPage, CloudPage, SettingsPage, AboutPage
@@ -294,4 +389,6 @@ AWS を使わずに「AWS / Cloud」ページを確認するには、起動引�
 - **「AWS の認証に失敗しました」**: アクセスキーが無効（削除・無効化済み）か、PC の時刻が大きくずれています。
 - **「権限がありません」**: IAM ポリシーのリージョン・アカウントID・インスタンスIDが正しいか確認してください。EBS ボリュームをカスタマー管理の KMS キーで暗号化している場合は、起動に `kms:CreateGrant` も必要です。
 - **「インスタンスが見つかりません」**: リージョンとインスタンスIDの組み合わせを確認してください（大阪は `ap-northeast-3`、東京は `ap-northeast-1`）。
+- **「EC2 上のゲームサーバー」が「常駐サービス未確認」「応答なし」のまま**: EC2 に常駐サービスが入っているか、EC2 に IAM ロールが割り当てられているかを確認してください。常駐サービスのログ（`C:\ProgramData\DreadHungerServerManager\logs`）に原因が出ます。
+- **「Parameter Store の … を使う権限がありません」**: 自宅の PC の IAM ユーザー、または EC2 の IAM ロールのポリシーに `ssm:GetParameter`・`ssm:PutParameter`（`/dhsm/default/*`）があるか確認してください。
 - **外部から接続できない**: Windows ファイアウォールと（EC2の場合は）セキュリティグループで、ゲームポート（既定 UDP 7777。`-port` で変えた場合はその番号）の受信を許可してください。

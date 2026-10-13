@@ -63,7 +63,7 @@ public partial class App : Application
         var presets = new PresetService(new JsonPresetStore(paths.PresetsFile));
         _manager = new ServerProcessManager();
         var interaction = new UserInteractionService();
-        ViewModel = new ServerViewModel(new GameServerController(_manager), presets, interaction, paths, loaded.Value, SynchronizationContext.Current!);
+        ViewModel = new ServerViewModel(new GameServerController(_manager), presets, interaction, paths, loaded.Value, SynchronizationContext.Current!, IsHostServiceRunning);
         CloudViewModel = CreateCloudViewModel(loaded.Value.Cloud, interaction);
 
         _window = new MainWindow(ViewModel);
@@ -98,16 +98,20 @@ public partial class App : Application
         var simulated = Environment.GetCommandLineArgs().Any(arg => string.Equals(arg, "--fake-cloud", StringComparison.OrdinalIgnoreCase));
         ICloudInstanceService cloud;
         Func<IReadOnlyList<string>> listProfiles;
+        Func<CloudSettings, IServerControlStore?> createControlStore;
         if (simulated)
         {
             cloud = new FakeCloudInstanceService { StartDuration = TimeSpan.FromSeconds(15), StopDuration = TimeSpan.FromSeconds(10) };
             listProfiles = () => [];
+            var store = new InMemoryServerControlStore();
+            createControlStore = _ => store;
         }
         else
         {
-            _awsClients = new AwsClientFactory { ProfileName = settings.ProfileName };
-            cloud = new AwsEc2InstanceService(_awsClients);
+            var clients = _awsClients = new AwsClientFactory { ProfileName = settings.ProfileName };
+            cloud = new AwsEc2InstanceService(clients);
             listProfiles = AwsClientFactory.ListProfileNames;
+            createControlStore = current => current.TryGetInstanceRef() is { } instance ? new SsmServerControlStore(clients, instance.Region) : null;
         }
 
         return new CloudViewModel(
@@ -118,7 +122,24 @@ public partial class App : Application
             listProfiles,
             async () => (await Ec2InstanceMetadata.TryGetIdentityAsync())?.InstanceId,
             ViewModel.StopServerForShutdownAsync,
+            createControlStore,
+            ViewModel.Game.TryGetSettings,
+            $"GUI:{Environment.MachineName}",
             simulated);
+    }
+
+    /// <summary>この PC で常駐サービス（EC2 用の Windows サービス）が動いているか。</summary>
+    private static bool IsHostServiceRunning()
+    {
+        try
+        {
+            using var service = new System.ServiceProcess.ServiceController(HostService.Name);
+            return service.Status is System.ServiceProcess.ServiceControllerStatus.Running or System.ServiceProcess.ServiceControllerStatus.StartPending;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return false;
+        }
     }
 
     private void ScheduleSave()

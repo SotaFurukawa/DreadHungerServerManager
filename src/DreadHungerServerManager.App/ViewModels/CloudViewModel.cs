@@ -14,12 +14,19 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan StartTimeout = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan StopTimeout = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan RemoteStartTimeout = TimeSpan.FromMinutes(6);
+    private static readonly TimeSpan RemoteStopTimeout = TimeSpan.FromMinutes(2);
 
     private readonly ICloudInstanceService _cloud;
     private readonly IUserInteraction _ui;
     private readonly Func<IReadOnlyList<string>> _listProfiles;
     private readonly Func<Task<string?>> _getThisMachineInstanceId;
     private readonly Func<Task<bool>> _stopLocalGameServerAsync;
+    private readonly Func<CloudSettings, IServerControlStore?> _createControlStore;
+    private readonly Func<GameSettings?> _getGameSettings;
+    private readonly string _requester;
+    private ServerHeartbeat? _heartbeat;
+    private string? _remoteError;
     private readonly OperationGate _gate = new();
     private readonly Timer _refreshTimer;
     private readonly SynchronizationContext _uiContext;
@@ -33,6 +40,9 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
 
     /// <param name="getThisMachineInstanceId">この PC が EC2 なら、そのインスタンスID。</param>
     /// <param name="stopLocalGameServerAsync">このアプリで管理しているゲームサーバーを止める（この PC 自体の EC2 を停止する前に呼ぶ）。</param>
+    /// <param name="createControlStore">EC2 上の常駐サービスと要求・状態を受け渡す置き場所（未設定ならnull）。</param>
+    /// <param name="getGameSettings">EC2 上のゲームサーバーの起動に使う設定（「サーバー」ページの設定。誤りがあればnull）。</param>
+    /// <param name="requester">要求者として記録する名前（例: "GUI:MYPC"）。</param>
     public CloudViewModel(
         ICloudInstanceService cloud,
         CloudSettings settings,
@@ -41,6 +51,9 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         Func<IReadOnlyList<string>> listProfiles,
         Func<Task<string?>> getThisMachineInstanceId,
         Func<Task<bool>> stopLocalGameServerAsync,
+        Func<CloudSettings, IServerControlStore?> createControlStore,
+        Func<GameSettings?> getGameSettings,
+        string requester,
         bool isSimulated = false)
     {
         _cloud = cloud;
@@ -50,6 +63,9 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         _listProfiles = listProfiles;
         _getThisMachineInstanceId = getThisMachineInstanceId;
         _stopLocalGameServerAsync = stopLocalGameServerAsync;
+        _createControlStore = createControlStore;
+        _getGameSettings = getGameSettings;
+        _requester = requester;
         IsSimulated = isSimulated;
 
         RefreshCommand = new AsyncRelayCommand(() => RefreshAsync(showErrors: true), () => CanOperate);
@@ -58,6 +74,9 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         CopyIpCommand = new RelayCommand(() => Copy(PublicIp, "IP アドレス"), () => PublicIp is not null);
         CopyAddressCommand = new RelayCommand(() => Copy(ConnectAddress, "接続先"), () => ConnectAddress is not null);
         ReloadProfilesCommand = new RelayCommand(ReloadProfiles);
+        RemoteStartCommand = new AsyncRelayCommand(() => SendRemoteAsync(ServerControlAction.Start), () => CanOperateRemote && RemoteState == ServerState.Stopped);
+        RemoteRestartCommand = new AsyncRelayCommand(() => SendRemoteAsync(ServerControlAction.Restart), () => CanOperateRemote && RemoteState != ServerState.Stopped);
+        RemoteStopCommand = new AsyncRelayCommand(() => SendRemoteAsync(ServerControlAction.Stop), () => CanOperateRemote && RemoteState != ServerState.Stopped);
 
         ReloadProfiles();
         _refreshTimer = new Timer(_ => _uiContext.Post(_ => OnRefreshTick(), null), null, TimeSpan.FromSeconds(1), RefreshInterval);
@@ -82,6 +101,12 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
     public RelayCommand CopyAddressCommand { get; }
 
     public RelayCommand ReloadProfilesCommand { get; }
+
+    public AsyncRelayCommand RemoteStartCommand { get; }
+
+    public AsyncRelayCommand RemoteRestartCommand { get; }
+
+    public AsyncRelayCommand RemoteStopCommand { get; }
 
     // ---- 接続設定 ----
 
@@ -180,7 +205,122 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
 
     public bool HasError => _errorMessage is not null;
 
+    // ---- EC2 上のゲームサーバー（常駐サービスの状態） ----
+
+    /// <summary>常駐サービスの状態が新しい（応答している）か。</summary>
+    public bool IsRemoteAlive => _heartbeat is { } heartbeat && !heartbeat.IsStale(DateTimeOffset.UtcNow) && State == CloudInstanceState.Running;
+
+    public ServerState RemoteState => IsRemoteAlive ? _heartbeat!.State : ServerState.Stopped;
+
+    public string RemoteStateText
+    {
+        get
+        {
+            if (!IsConfigured || HasSettingsError)
+            {
+                return "—";
+            }
+
+            if (State != CloudInstanceState.Running)
+            {
+                return State == CloudInstanceState.Starting ? "EC2 起動待ち" : "EC2 が稼働していません";
+            }
+
+            if (_heartbeat is null)
+            {
+                return _remoteError is null ? "常駐サービス未確認" : "取得できません";
+            }
+
+            if (!IsRemoteAlive)
+            {
+                return "応答なし";
+            }
+
+            return (_heartbeat.State, _heartbeat.MatchState) switch
+            {
+                (ServerState.Running, MatchStates.PokerGame) => "起動中（開始準備中）",
+                (ServerState.Running, MatchStates.InProgress) => "起動中（試合中）",
+                (ServerState.Running, MatchStates.WaitingPostMatch) => "起動中（試合終了）",
+                (ServerState.Running, _) when _heartbeat.IsReady => "起動中（参加待ち）",
+                (ServerState.Running, _) => "起動中",
+                (ServerState.Starting, _) => "起動処理中",
+                (ServerState.Stopping, _) => "停止処理中",
+                _ => "停止中",
+            };
+        }
+    }
+
+    public string RemoteDetailText
+    {
+        get
+        {
+            if (!IsConfigured || State != CloudInstanceState.Running)
+            {
+                return "EC2 が稼働すると、常駐サービスがゲームサーバーを自動で起動します（常駐サービスを入れた場合）。";
+            }
+
+            if (_heartbeat is not { } heartbeat)
+            {
+                return "常駐サービスの状態がまだありません。EC2 に常駐サービスを入れていない場合は、README の「EC2 の常駐サービス」を参照してください。";
+            }
+
+            var parts = new List<string>();
+            if (heartbeat.Settings is { } settings)
+            {
+                parts.Add($"マップ: {GameMaps.Get(settings.Map).DisplayName}");
+            }
+
+            if (heartbeat.State != ServerState.Stopped)
+            {
+                parts.Add($"プレイヤー: {heartbeat.PlayerCount}人" + (heartbeat.Settings is { } running ? $" / {running.MaxPlayers}" : ""));
+                if (heartbeat.ServerStartedAt is { } startedAt)
+                {
+                    var uptime = DateTimeOffset.UtcNow - startedAt;
+                    parts.Add($"稼働: {(uptime < TimeSpan.Zero ? TimeSpan.Zero : uptime):hh\\:mm\\:ss}");
+                }
+            }
+            else if (heartbeat.LastExitMessage is { } exit)
+            {
+                parts.Add(exit);
+            }
+
+            parts.Add($"更新 {heartbeat.UpdatedAt.ToLocalTime():HH:mm:ss}");
+            if (!IsRemoteAlive)
+            {
+                parts.Add("常駐サービスからの更新が止まっています");
+            }
+
+            return string.Join("　", parts);
+        }
+    }
+
+    /// <summary>最後の要求の結果。</summary>
+    public string RemoteLastResultText => _heartbeat?.LastResult is { } result
+        ? $"最後の操作（{result.CompletedAt.ToLocalTime():MM/dd HH:mm}）: {(result.Succeeded ? "成功" : "失敗")} - {result.Message}"
+        : "";
+
+    public string? RemoteError
+    {
+        get => _remoteError;
+        private set
+        {
+            if (SetProperty(ref _remoteError, value))
+            {
+                OnPropertyChanged(nameof(HasRemoteError));
+            }
+        }
+    }
+
+    public bool HasRemoteError => _remoteError is not null;
+
+    /// <summary>EC2 上のゲームサーバーの起動・再起動に使う設定の説明。</summary>
+    public string RemoteLaunchSettingsText => _getGameSettings() is { } settings
+        ? $"起動・再起動には「サーバー」ページの設定を使います（{GameMaps.Get(settings.Map).DisplayName}・最大{settings.MaxPlayers}人・人狼{settings.Thralls}人）。"
+        : "「サーバー」ページのゲーム設定に誤りがあるため、起動・再起動できません。";
+
     private bool CanOperate => IsConfigured && !HasSettingsError && !IsBusy;
+
+    private bool CanOperateRemote => CanOperate && State == CloudInstanceState.Running;
 
     public void Dispose() => _refreshTimer.Dispose();
 
@@ -196,6 +336,7 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         try
         {
             ApplyStatus(await _cloud.GetStatusAsync(instance));
+            await RefreshRemoteAsync();
         }
         catch (CloudOperationException ex)
         {
@@ -209,6 +350,96 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         {
             _isRefreshing = false;
         }
+    }
+
+    /// <summary>常駐サービスが書き出した状態を読む。EC2 が稼働していなければ読まない。</summary>
+    private async Task RefreshRemoteAsync()
+    {
+        if (State != CloudInstanceState.Running || _createControlStore(_settings) is not { } store)
+        {
+            ApplyHeartbeat(null);
+            return;
+        }
+
+        try
+        {
+            ApplyHeartbeat(await store.GetHeartbeatAsync(_settings.ServerId));
+            RemoteError = null;
+        }
+        catch (CloudOperationException ex)
+        {
+            RemoteError = ex.Message;
+            RaiseRemoteProperties();
+        }
+    }
+
+    private async Task SendRemoteAsync(ServerControlAction action)
+    {
+        if (_createControlStore(_settings) is not { } store)
+        {
+            return;
+        }
+
+        GameSettings? settings = null;
+        if (action != ServerControlAction.Stop)
+        {
+            settings = _getGameSettings();
+            if (settings is null)
+            {
+                await _ui.ShowErrorAsync("ゲームサーバーを起動できません", "「サーバー」ページのゲーム設定に誤りがあります。直してからもう一度実行してください。");
+                return;
+            }
+        }
+
+        var (name, confirmTitle, confirmMessage, timeout) = action switch
+        {
+            ServerControlAction.Stop => ("ゲームサーバー停止", "EC2 上のゲームサーバーを停止しますか？", "接続中のプレイヤーは切断されます。EC2 は稼働したままです。", RemoteStopTimeout),
+            ServerControlAction.Restart => ("ゲームサーバー再起動", "EC2 上のゲームサーバーを再起動しますか？", "接続中のプレイヤーは切断され、「サーバー」ページの設定で起動し直します。", RemoteStartTimeout),
+            _ => ("ゲームサーバー起動", null, null, RemoteStartTimeout),
+        };
+        if (confirmTitle is not null && !await _ui.ConfirmAsync(confirmTitle, confirmMessage!, action == ServerControlAction.Stop ? "停止する" : "再起動する"))
+        {
+            return;
+        }
+
+        await RunOperationAsync(name, "EC2 上の常駐サービスへ要求を送っています…", async () =>
+        {
+            var request = ServerControlRequest.Create(action, settings, _requester, DateTimeOffset.UtcNow);
+            SetOperationText($"{name}: 常駐サービスの応答を待っています…（数秒～数分）");
+            var result = await new ServerControlClient(store).SendAsync(
+                _settings.ServerId,
+                request,
+                timeout,
+                progress: new Progress<ServerHeartbeat>(ApplyHeartbeat));
+            await RefreshRemoteAsync();
+            if (result.Succeeded)
+            {
+                _ui.ShowToast(result.Message);
+            }
+            else
+            {
+                await _ui.ShowErrorAsync($"{name}に失敗しました", result.Message);
+            }
+        });
+    }
+
+    private void ApplyHeartbeat(ServerHeartbeat? heartbeat)
+    {
+        _heartbeat = heartbeat;
+        RaiseRemoteProperties();
+    }
+
+    private void RaiseRemoteProperties()
+    {
+        OnPropertyChanged(nameof(IsRemoteAlive));
+        OnPropertyChanged(nameof(RemoteState));
+        OnPropertyChanged(nameof(RemoteStateText));
+        OnPropertyChanged(nameof(RemoteDetailText));
+        OnPropertyChanged(nameof(RemoteLastResultText));
+        OnPropertyChanged(nameof(RemoteLaunchSettingsText));
+        RemoteStartCommand.NotifyCanExecuteChanged();
+        RemoteRestartCommand.NotifyCanExecuteChanged();
+        RemoteStopCommand.NotifyCanExecuteChanged();
     }
 
     private async Task StartAsync()
@@ -331,6 +562,8 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         if (targetChanged)
         {
             _status = null;
+            _heartbeat = null;
+            RemoteError = null;
             _lastUpdated = null;
             ErrorMessage = null;
             RaiseStatusProperties();
@@ -357,6 +590,7 @@ public sealed class CloudViewModel : ObservableObject, IDisposable
         StopCommand.NotifyCanExecuteChanged();
         CopyIpCommand.NotifyCanExecuteChanged();
         CopyAddressCommand.NotifyCanExecuteChanged();
+        RaiseRemoteProperties();
     }
 
     private void OnRefreshTick()
